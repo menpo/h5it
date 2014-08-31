@@ -11,8 +11,8 @@ requirements:
     - python
     - numpy
     - h5py
-    - pathlib # [no py3k]
-    - enum    # [no py3k]
+    - pathlib # [not py3k]
+    - enum    # [not py3k]
 	
 test:
   imports:
