@@ -1,0 +1,24 @@
+package:
+  name: hdf5able
+  version: VERSION_NUMBER
+
+requirements:
+  build:
+    - python
+    - distribute
+
+  run:
+    - python
+    - numpy
+    - h5py
+    - pathlib
+    - enum
+	
+test:
+  imports:
+    - hdf5able
+
+about:
+  home: https://github.com/menpo/hdf5able/
+  license: BSD License
+
