@@ -2,9 +2,7 @@ import abc
 from collections import namedtuple, OrderedDict
 from enum import Enum
 from pathlib import Path
-
 import numpy as np
-from numpy import ndarray
 import h5py
 
 
@@ -182,7 +180,7 @@ from numbers import Number
 types = [T(list, "list", h_import_list, h_export_list),
          T(dict, "dict", h_import_dict, h_export_dict),
          T(HDF5able, "HDF5able", h_import_hdf5able, h_export_hdf5able),
-         T(ndarray, "ndarray", h_import_ndarray, h_export_ndarray),
+         T(np.ndarray, "ndarray", h_import_ndarray, h_export_ndarray),
          T(type(None), "NoneType", h_import_none, h_export_none),
          T(str, "str", h_import_str, h_export_str),
          T(bool, "bool", h_import_bool, h_export_bool),

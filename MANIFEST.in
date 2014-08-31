@@ -1,0 +1,2 @@
+include versioneer.py
+include hdf5able/_version.py
