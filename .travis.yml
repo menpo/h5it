@@ -2,20 +2,17 @@ env:
   global:
     secure: H+BYasgSxi3eDq6Nw17O+joRzYffbH5X2drt/ZX18JjYIkpwpGuB1bUEx+94Mdvq5uaISgUUDT6Kz4rE4d5iy/vtcflfW+AXuTVR4AOt3GqzxHZvJRJ24kccazFuSiH7wiYD1/7G/B6CV+etwu6dayKfIqAkauBEkdRzFldiSww=
   matrix:
-  - MINICONDA_URL=http://repo.continuum.io/miniconda/Miniconda-3.6.0-Linux-x86_64.sh
-  - MINICONDA_URL=http://repo.continuum.io/miniconda/Miniconda3-3.6.0-Linux-x86_64.sh
+  - PYTHON_VERSION=2
+  - PYTHON_VERSION=3
 
 install:
-- wget https://raw.githubusercontent.com/jabooth/traviconda/master/traviconda.py -O
-  traviconda.py
-- chmod +x traviconda.py
-- ./traviconda.py setup ./conda --url $MINICONDA_URL --channel menpo
-- sudo rm -rf /dev/shm
-- sudo ln -s /run/shm /dev/shm
+- wget https://raw.githubusercontent.com/jabooth/traviconda/master/traviconda.py -O traviconda.py
+- python traviconda.py setup --python $PYTHON_VERSION --channel menpo
+- export HDF5ABLE_VERSION=$(python traviconda.py version)
 - export PATH=/home/travis/miniconda/bin:$PATH
 
 script:
-- ./traviconda.py build ./conda --user menpo --key $BINSTAR_KEY
+- python traviconda.py build --path ./conda --user menpo --key $BINSTAR_KEY
 
 notifications:
   email: false

@@ -1,6 +1,6 @@
 package:
   name: hdf5able
-  version: VERSION_NUMBER
+  version: {{ environ['HDF5ABLE_VERSION'] }}
 
 requirements:
   build:
