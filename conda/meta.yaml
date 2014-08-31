@@ -11,8 +11,8 @@ requirements:
     - python
     - numpy
     - h5py
-    - pathlib
-    - enum
+    - pathlib # [no py3k]
+    - enum    # [no py3k]
 	
 test:
   imports:
@@ -21,4 +21,3 @@ test:
 about:
   home: https://github.com/menpo/hdf5able/
   license: BSD License
-
