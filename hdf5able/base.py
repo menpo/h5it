@@ -1,5 +1,5 @@
-import abc
 from collections import namedtuple, OrderedDict
+import importlib
 from enum import Enum
 from pathlib import Path
 import numpy as np
@@ -31,7 +31,7 @@ def h_import_dict(node):
 
 
 def h_import_hdf5able(node):
-    cls = str_to_cls[node.attrs[AttrKey.hdf5able_cls]]
+    cls = import_hdf5able(node.attrs[AttrKey.hdf5able_cls])
     return cls.h5_rebuild(cls.h5_import_to_dict(node))
 
 
@@ -118,36 +118,15 @@ def h_export_path(parent, path, name):
 
 str_of_cls = lambda x: "{}.{}".format(x.__module__, x.__name__)
 
-str_to_cls = {}
-cls_to_str = {}
 
-
-def h5_register_cls(cls):
-    cls_str = str_of_cls(cls)
-    print("Registering {}: {}".format(cls_str, cls))
-    str_to_cls[cls_str] = cls
-    cls_to_str[cls] = cls_str
-
-
-class HDF5Meta(type):
-
-    def __new__(cls, name, bases, attrs):
-        new_cls = super(HDF5Meta, cls).__new__(cls, name, bases, attrs)
-        h5_register_cls(new_cls)
-        return new_cls
-
-
-class HDF5ABCMeta(abc.ABCMeta):
-
-    def __new__(cls, name, bases, attrs):
-        new_cls = super(HDF5ABCMeta, cls).__new__(cls, name, bases, attrs)
-        h5_register_cls(new_cls)
-        return new_cls
+def import_hdf5able(name):
+    callable_name = name.split('.')[-1]
+    module_name = '.'.join(name.split('.')[:-1])
+    m = importlib.import_module(module_name)
+    return m.__getattribute__(callable_name)
 
 
 class HDF5able(object):
-
-    __metaclass__ = HDF5ABCMeta
 
     @classmethod
     def h5_rebuild(cls, d):
@@ -226,5 +205,5 @@ def h_export(parent, x, name):
             new_node.attrs[AttrKey.type] = type_to_str[Type]
             return
     print("Cannot find exporter for {} named {} of type {}".format(
-          name, x, type(x)))
+          x, name, type(x)))
 
