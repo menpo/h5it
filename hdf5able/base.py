@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import h5py
 
+from .function import serialize_f_and_test, deserialise_f
 
 # IMPORT
 
@@ -144,6 +145,30 @@ class HDF5able(object):
         h_export_dict(parent, self.__dict__, name)
 
 
+class SerializableCallable(HDF5able):
+
+    def __init__(self, f, modules, testargs=None, testkwargs=None):
+        self.f = f
+        self.modules = modules
+        self.testargs = testargs
+        self.testkwargs = testkwargs
+
+    def h5_export_to_dict(self, parent, name):
+        serialized_f = serialize_f_and_test(self.f, self.modules,
+                                            args=self.testargs,
+                                            kwargs=self.testkwargs)
+        return {
+            'name': serialized_f.name,
+            'source': serialized_f.source,
+            'modules': serialized_f.modules
+        }
+
+    @classmethod
+    def h5_rebuild(cls, d):
+        # just return directly the function
+        return deserialise_f(d['name'], d['source'], d['modules'])
+
+
 class AttrKey(Enum):
     type = 'type'
     hdf5able_cls = 'cls'
@@ -198,12 +223,11 @@ def h_import(node):
 
 
 def h_export(parent, x, name):
-    for Type, exporter in type_to_exporter.iteritems():
+    for Type, exporter in type_to_exporter.items():
         if isinstance(x, Type):
             exporter(parent, x, name)
             new_node = parent[name]
             new_node.attrs[AttrKey.type] = type_to_str[Type]
             return
-    print("Cannot find exporter for {} named {} of type {}".format(
-          x, name, type(x)))
-
+    raise ValueError("Cannot export {} named "
+                     "'{'} of type {}".format(x, name, type(x)))
