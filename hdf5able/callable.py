@@ -2,6 +2,8 @@ import inspect
 import importlib
 from collections import namedtuple
 from functools import partial
+from mock import Mock
+from inspect import getargspec
 
 SerializedFunc = namedtuple('SerializedFunc', ['name', 'source', 'modules'])
 
@@ -12,12 +14,21 @@ def serialize_f_and_test(f, modules, args=None, kwargs=None):
     if kwargs is None:
         kwargs = {}
     # save the function down
-    f = serialize_f(f, modules)
+    serialized_c = serialize_f(f, modules)
     # attempt to re-serialize
-    f_rebuilt = deserialise_f(*f)
-    f_rebuilt(*args, **kwargs)
-    print('function was succesfully rebuilt')
-    return f
+    f_rebuilt = deserialise_f(*serialized_c)
+    if serialized_c.source is not None:
+        # test the function
+        test_callable(f_rebuilt)
+        print('callable was successfully rebuilt')
+    else:
+        print('callable is in namespace - no need to test')
+    return serialized_c
+
+
+def test_callable(c):
+    args = [Mock() for _ in range(len(getargspec(c).args))]
+    c(*args)
 
 
 def serialize_f(f, modules):
@@ -25,14 +36,15 @@ def serialize_f(f, modules):
     name_to_entity = namespace_for_modules(modules)
     module_names = [module_to_str(m) for m in modules]
     # build the inverse mapping {item: name}
-    entity_to_name = {v: k for k, v in name_to_entity.iteritems()}
+    entity_to_name = {v: k for k, v in name_to_entity.iteritems()
+                      if callable(v)}
     # see if f is in the module namespace
     name = entity_to_name.get(f)
     if name is not None:
         # f is directly in the namespace - easy to serialize.
         print("{} is in the namespace - being saved directly".format(f))
-        return SerializedFunc(name, '', module_names)
-    elif hasattr(f, 'source'):
+        return SerializedFunc(name, None, module_names)
+    elif hasattr(f, 'h5_source'):
         # f is a novel function that has it's own source attached.
         print("{} has been previously exported, reusing source".format(f))
         return SerializedFunc(f.__name__, f.source, module_names)
@@ -48,11 +60,15 @@ def serialize_f(f, modules):
         return SerializedFunc(f.__name__, source, module_names)
 
 
-def deserialise_f(name, source, module_strs):
-    modules = [str_to_module(m) for m in module_strs]
-    namespace = namespace_for_modules(modules)
+def deserialise_f(name, source, modules):
+    source_modules = [str_to_module(m) for m in modules]
+    namespace = namespace_for_modules(source_modules)
     # exec the function in this namespace
-    return safe_exec(source, namespace, name)
+    if source is None:
+        # must be directly in namespace
+        return namespace[name]
+    else:
+        return safe_exec(source, namespace, name)
 
 
 def str_to_module(module_str):
@@ -82,7 +98,7 @@ def safe_exec(source, namespace, name):
     namespace = namespace.copy()
     exec(source, namespace)
     f = namespace[name]
-    f.source = source
+    f.h5_source = source
     return f
 
 # def source_for_partial(p):

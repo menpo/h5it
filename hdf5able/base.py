@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import h5py
 
-from .function import serialize_f_and_test, deserialise_f
+from .callable import serialize_f, serialize_f_and_test, deserialise_f
 
 # IMPORT
 
@@ -33,7 +33,7 @@ def h_import_dict(node):
 
 def h_import_hdf5able(node):
     cls = import_hdf5able(node.attrs[AttrKey.hdf5able_cls])
-    return cls.h5_rebuild(cls.h5_import_to_dict(node))
+    return cls.h5_rebuild_from_dict(cls.h5_import_as_dict(node))
 
 
 def h_import_ndarray(node):
@@ -83,7 +83,7 @@ def h_export_dict(parent, d, name):
 
 def h_export_hdf5able(parent, hdf5able, name):
     # Objects behave a lot like dictionaries
-    hdf5able.h5_export_to_dict(parent, name)
+    hdf5able.h5_export_as_dict(parent, name)
     # HDF5able added itself to the parent. Grab the node
     node = parent[name]
     # And set the attribute so it can be decoded.
@@ -130,43 +130,52 @@ def import_hdf5able(name):
 class HDF5able(object):
 
     @classmethod
-    def h5_rebuild(cls, d):
+    def h5_rebuild_from_dict(cls, d):
         # by default, __new__ cls -> set dict.
         instance = cls.__new__(cls)
         instance.__dict__ = d
         return instance
 
+    def h5_dict_representation(self):
+        return self.__dict__
+
     @classmethod
-    def h5_import_to_dict(cls, node):
+    def h5_import_as_dict(cls, node):
         # default behavior - import this node as a dict
         return h_import_dict(node)
 
-    def h5_export_to_dict(self, parent, name):
-        h_export_dict(parent, self.__dict__, name)
+    def h5_export_as_dict(self, parent, name):
+        h_export_dict(parent, self.h5_dict_representation(), name)
 
 
-class SerializableCallable(HDF5able):
+class UntestedSerializableCallable(HDF5able):
 
-    def __init__(self, f, modules, testargs=None, testkwargs=None):
+    def __init__(self, f, modules):
         self.f = f
         self.modules = modules
+
+    def h5_dict_representation(self):
+        serialized_f = serialize_f(self.f, self.modules)
+        return serialized_f._asdict()
+
+    @classmethod
+    def h5_rebuild_from_dict(cls, d):
+        # just return directly the function
+        return deserialise_f(**d)
+
+
+class TestedSerializableCallable(UntestedSerializableCallable):
+
+    def __init__(self, f, modules, testargs=None, testkwargs=None):
+        UntestedSerializableCallable.__init__(self, f, modules)
         self.testargs = testargs
         self.testkwargs = testkwargs
 
-    def h5_export_to_dict(self, parent, name):
+    def h5_dict_representation(self):
         serialized_f = serialize_f_and_test(self.f, self.modules,
                                             args=self.testargs,
                                             kwargs=self.testkwargs)
-        return {
-            'name': serialized_f.name,
-            'source': serialized_f.source,
-            'modules': serialized_f.modules
-        }
-
-    @classmethod
-    def h5_rebuild(cls, d):
-        # just return directly the function
-        return deserialise_f(d['name'], d['source'], d['modules'])
+        return serialize_f._asdict()
 
 
 class AttrKey(Enum):
@@ -186,7 +195,7 @@ types = [T(list, "list", h_import_list, h_export_list),
          T(HDF5able, "HDF5able", h_import_hdf5able, h_export_hdf5able),
          T(np.ndarray, "ndarray", h_import_ndarray, h_export_ndarray),
          T(type(None), "NoneType", h_import_none, h_export_none),
-         T(str, "str", h_import_str, h_export_str),
+         T((str, unicode), "unicode", h_import_str, h_export_str),
          T(bool, "bool", h_import_bool, h_export_bool),
          T(Path, "pathlib.Path", h_import_path, h_export_path),
          T(Number, "Number", h_import_number, h_export_number)]
