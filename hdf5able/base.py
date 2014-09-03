@@ -230,4 +230,4 @@ def h_export(parent, x, name):
             new_node.attrs[AttrKey.type] = type_to_str[Type]
             return
     raise ValueError("Cannot export {} named "
-                     "'{'} of type {}".format(x, name, type(x)))
+                     "'{}' of type {}".format(x, name, type(x)))
