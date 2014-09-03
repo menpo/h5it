@@ -5,7 +5,8 @@ from pathlib import Path
 import numpy as np
 import h5py
 
-from .callable import serialize_f, serialize_f_and_test, deserialise_f
+from .callable import (serialize_callable, serialize_callable_and_test,
+                       deserialize_callable)
 
 # IMPORT
 
@@ -148,34 +149,35 @@ class HDF5able(object):
         h_export_dict(parent, self.h5_dict_representation(), name)
 
 
-class UntestedSerializableCallable(HDF5able):
+class SerializableCallable(HDF5able):
 
     def __init__(self, f, modules):
         self.f = f
         self.modules = modules
 
     def h5_dict_representation(self):
-        serialized_f = serialize_f(self.f, self.modules)
-        return serialized_f._asdict()
+        serialized_c = serialize_callable(self.f, self.modules)
+        return serialized_c._asdict()
 
     @classmethod
     def h5_rebuild_from_dict(cls, d):
         # just return directly the function
-        return deserialise_f(**d)
+        return deserialize_callable(**d)
 
 
-class TestedSerializableCallable(UntestedSerializableCallable):
+class TestedSerializableCallable(SerializableCallable):
 
     def __init__(self, f, modules, testargs=None, testkwargs=None):
-        UntestedSerializableCallable.__init__(self, f, modules)
+        SerializableCallable.__init__(self, f, modules)
         self.testargs = testargs
         self.testkwargs = testkwargs
 
     def h5_dict_representation(self):
-        serialized_f = serialize_f_and_test(self.f, self.modules,
-                                            args=self.testargs,
-                                            kwargs=self.testkwargs)
-        return serialize_f._asdict()
+        serialized_c = serialize_callable_and_test(self.f,
+                                                   self.modules,
+                                                   args=self.testargs,
+                                                   kwargs=self.testkwargs)
+        return serialized_c._asdict()
 
 
 class AttrKey(Enum):
