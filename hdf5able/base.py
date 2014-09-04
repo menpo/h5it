@@ -43,6 +43,10 @@ def import_list(node):
     return items
 
 
+def import_tuple(node):
+    return tuple(import_list(node))
+
+
 def import_dict(node):
     imported_dict = {}
     for k, v in node.iteritems():
@@ -210,6 +214,7 @@ T = namedtuple('T', ["type", "str", "importer", "exporter"])
 
 
 types = [T(list, "list", import_list, export_list),
+         T(tuple, "tuple", import_tuple, export_list),  # export is as list
          T(dict, "dict", import_dict, export_dict),
          T(HDF5able, "HDF5able", h_import_hdf5able, export_hdf5able),
          T(np.ndarray, "ndarray", import_ndarray, export_ndarray),

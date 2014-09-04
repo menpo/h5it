@@ -66,6 +66,10 @@ def test_save_recursive_list():
     save(path, [1, 'a', None, True, [b'another', -125.14]])
 
 
+def test_save_empty_tuple():
+    save(path, tuple())
+
+
 def test_save_empty_dict():
     save(path, {})
 
