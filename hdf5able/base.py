@@ -3,12 +3,28 @@ from numbers import Number
 import importlib
 from enum import Enum
 from pathlib import Path
+import sys
 
 import numpy as np
 import h5py
 
 from .callable import (serialize_callable, serialize_callable_and_test,
                        deserialize_callable)
+
+
+isPython2 = sys.version_info.major == 2
+
+if isPython2:
+    strTypes = (str, unicode)
+else:
+    strTypes = (unicode, bytes)
+
+
+def u(s):
+    if isPython2:
+        return unicode(s)
+    else:
+        return str(s)
 
 # ------------------------------ IMPORTS ------------------------------ #
 
@@ -48,7 +64,7 @@ def import_none(_):
 
 
 def import_str(node):
-    return unicode(np.array(node))
+    return u(np.array(node))
 
 
 def import_bool(node):
@@ -65,7 +81,7 @@ def import_path(node):
 
 # ------------------------------ EXPORTS ------------------------------ #
 
-zero_padded = lambda x: "{:0" + str(len(str(x))) + "}"
+zero_padded = lambda x: "{:0" + u(len(u(x))) + "}"
 
 
 def export_list(parent, l, name):
@@ -77,7 +93,7 @@ def export_list(parent, l, name):
 
 def export_dict(parent, d, name):
     dict_node = parent.create_group(name)
-    if sum(not isinstance(k, (str, unicode)) for k in d.keys()) != 0:
+    if sum(not isinstance(k, strTypes) for k in d.keys()) != 0:
         raise ValueError("Only dictionaries with string keys can be "
                          "serialized")
     for k, v in d.iteritems():
@@ -117,7 +133,7 @@ def export_number(parent, a_number, name):
 
 
 def export_path(parent, path, name):
-    parent.create_dataset(name, data=str(path))
+    parent.create_dataset(name, data=u(path))
 
 
 str_of_cls = lambda x: "{}.{}".format(x.__module__, x.__name__)
@@ -198,7 +214,7 @@ types = [T(list, "list", import_list, export_list),
          T(HDF5able, "HDF5able", h_import_hdf5able, export_hdf5able),
          T(np.ndarray, "ndarray", import_ndarray, export_ndarray),
          T(type(None), "NoneType", import_none, export_none),
-         T((str, unicode), "unicode", import_str, export_str),
+         T(strTypes, "unicode", import_str, export_str),
          T(bool, "bool", import_bool, export_bool),
          T(Path, "pathlib.Path", import_path, export_path),
          T(Number, "Number", import_number, export_number)]

@@ -1,11 +1,18 @@
 from __future__ import unicode_literals
-from hdf5able import save, load
-
 import tempfile
 
 import numpy as np
 from nose.tools import raises
 from pathlib import Path, PosixPath
+
+from hdf5able import save, load
+
+from .base import isPython2
+
+if isPython2:
+    unicode_type = unicode
+else:
+    unicode_type = str
 
 path = tempfile.mkstemp()[1]
 
@@ -23,7 +30,7 @@ def test_save_complex():
 
 
 def test_save_unicode():
-    save(path, 'unicode str')
+    save(path, u'unicode str')
 
 
 def test_save_byte_str():
@@ -105,7 +112,7 @@ def test_load_unicode():
     save(path, x)
     y = load(path)
     assert y == x
-    assert type(y) == unicode
+    assert type(y) == unicode_type
 
 
 def test_load_byte_str():
@@ -113,7 +120,7 @@ def test_load_byte_str():
     save(path, x)
     y = load(path)
     assert y == x
-    assert type(y) == unicode
+    assert type(y) == unicode_type
 
 
 def test_load_bool():
