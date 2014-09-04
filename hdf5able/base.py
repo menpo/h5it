@@ -118,7 +118,7 @@ def save_hdf5able(parent, hdf5able, name):
 
 def save_ndarray(parent, a, name):
     # fletcher32 is a checksum, lzf is fast OK compression
-    parent.create_dataset(name, data=a, compression='lzf', fletcher32=True)
+    parent.create_dataset(name, data=a, compression='gzip', fletcher32=True)
 
 
 def save_none(parent, _, name):
