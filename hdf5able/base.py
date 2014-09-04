@@ -33,7 +33,7 @@ ListItem = namedtuple('ListItem', ['i', 'item'])
 
 def import_list(node):
     unordered = []
-    for i, (j, x) in enumerate(node.iteritems()):
+    for i, (j, x) in enumerate(node.items()):
         unordered.append(ListItem(int(j), h5_import(x)))
     ordered = sorted(unordered)
     counts = [x.i for x in ordered]
@@ -49,7 +49,7 @@ def import_tuple(node):
 
 def import_dict(node):
     imported_dict = {}
-    for k, v in node.iteritems():
+    for k, v in node.items():
         imported_dict[k] = h5_import(v)
     return imported_dict
 
@@ -100,7 +100,7 @@ def export_dict(parent, d, name):
     if sum(not isinstance(k, strTypes) for k in d.keys()) != 0:
         raise ValueError("Only dictionaries with string keys can be "
                          "serialized")
-    for k, v in d.iteritems():
+    for k, v in d.items():
         h5_export(dict_node, v, str(k))
 
 
