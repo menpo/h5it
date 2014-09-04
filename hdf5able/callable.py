@@ -1,6 +1,6 @@
 import inspect
 import importlib
-from collections import namedtuple
+from collections import namedtuple, Hashable
 from functools import partial
 try:
     from unittest.mock import MagicMock, patch  # Python 3
@@ -49,12 +49,12 @@ def test_callable(c):
 
 
 def serialize_callable(c, modules):
-    # build the namespace mapping {name: symbol}
-    name_to_symbol = namespace_for_modules(modules)
+    # build the namespace mapping {name: callable}
+    name_to_callable = {n: s for n, s in namespace_for_modules(modules).items()
+                        if callable(s) and isinstance(s, Hashable)}
     module_names = [module_to_str(m) for m in modules]
     # build the inverse mapping for callables {callable: name}
-    callable_to_name = {s: n for n, s in name_to_symbol.iteritems()
-                        if callable(s)}
+    callable_to_name = {s: n for n, s in name_to_callable.items()}
     # see if c is in the module namespace
     name = callable_to_name.get(c)
     if name is not None:
@@ -74,8 +74,17 @@ def serialize_callable(c, modules):
         # c is a novel function and needs to be introspected for it's
         # definition
         print("{} is an alien symbol - source code required".format(c))
-        source = inspect.getsource(c)
+        source = extract_source(c)
         return SerializedCallable(c.__name__, source, module_names)
+
+
+def extract_source(c):
+    source = inspect.getsource(c)
+    lines = source.splitlines()
+    l = lines[0]
+    # find any leading whitespace on the function and strip it
+    leading_space = len(l) - len(l.lstrip())
+    return '\n'.join([l[leading_space:] for l in lines])
 
 
 def deserialize_callable(name, source, modules):
