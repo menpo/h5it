@@ -70,6 +70,14 @@ def test_save_empty_tuple():
     save(path, tuple())
 
 
+def test_save_tuple():
+    save(path, (1, 'xyx', 15.161))
+
+
+def test_save_recursive_tuple():
+    save(path, (1, 'xyx', 15.161, (None, {'a': 1}, [1, 3, 4], True)))
+
+
 def test_save_empty_dict():
     save(path, {})
 
