@@ -230,7 +230,7 @@ def h5_import(node):
         if importer is not None:
             return importer(node)
         else:
-            print("Don't know how to import type {}".format(Type))
+            raise ValueError("Don't know how to import type {}".format(Type))
 
 
 def h5_export(parent, x, name):

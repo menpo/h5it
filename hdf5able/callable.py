@@ -18,29 +18,26 @@ def serialize_callable_and_test(c, modules):
     # attempt to re-serialize
     deserialize_callable(*serialized_c)
     if serialized_c.source is not None:
-        # test the callable
+        # test the callable source
         namespace = namespace_for_modules(modules)
         mock_namespace = {k: MagicMock() for k in namespace
                           if not (k.startswith('__') and k.endswith('__'))}
+        # mock namespace means the funciton has access to the desired
+        # namespace only, but everything in there is a MagicMock instance
         mock_c_rebuilt = deserialize_callable_in_namespace(
             serialized_c.name, serialized_c.source, mock_namespace)
         test_callable(mock_c_rebuilt)
-        print('callable was successfully rebuilt')
-    else:
-        print('callable is in namespace - no need to test')
     return serialized_c
 
 
 def test_callable(c):
     nargs = len(getargspec(c).args)
     args = [MagicMock() for _ in range(nargs)]
-    print('args are: {}'.format(args))
 
     # Store original __import__
     orig_import = __import__
 
     def import_mock(name, *args):
-        print('using import_mock')
         orig_import(name)
         return MagicMock()
 
@@ -65,11 +62,9 @@ def serialize_callable(c, modules):
     name = callable_to_name.get(c)
     if name is not None:
         # c is directly in the namespace - easy to serialize.
-        print("{} is in the namespace - being saved directly".format(c))
         return SerializedCallable(name, None, module_names)
     elif hasattr(c, 'h5_source'):
         # f is a novel function that has it's own source attached.
-        print("{} has been previously serialized, reusing source".format(c))
         return SerializedCallable(c.__name__, c.source, module_names)
     elif isinstance(c, partial):
         # Special case: c is a partially applied function (that isn't directly
@@ -79,7 +74,6 @@ def serialize_callable(c, modules):
     else:
         # c is a novel function and needs to be introspected for it's
         # definition
-        print("{} is an alien symbol - source code required".format(c))
         source = extract_source(c)
         return SerializedCallable(c.__name__, source, module_names)
 
