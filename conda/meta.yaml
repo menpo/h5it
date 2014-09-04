@@ -12,6 +12,7 @@ requirements:
     - numpy
     - h5py
     - pathlib # [not py3k]
+    - mock  # [not py3k]
 
 test:
   requires:

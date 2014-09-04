@@ -2,47 +2,50 @@ import inspect
 import importlib
 from collections import namedtuple
 from functools import partial
-#from mock import Mock, patch
-#from inspect import getargspec
+try:
+    from unittest.mock import MagicMock, patch  # Python 3
+except ImportError:
+    from mock import MagicMock, patch  # Python 2
+from inspect import getargspec
 
 SerializedCallable = namedtuple('SerializedCallable',
                                 ['name', 'source', 'modules'])
 
 
-def serialize_callable_and_test(c, modules, args=None, kwargs=None):
+def serialize_callable_and_test(c, modules):
     # save the callable down
     serialized_c = serialize_callable(c, modules)
     # attempt to re-serialize
-    c_rebuilt = deserialize_callable(*serialized_c)
+    deserialize_callable(*serialized_c)
     if serialized_c.source is not None:
         # test the callable
         namespace = namespace_for_modules(modules)
-        #test_callable(c_rebuilt, namespace, args, kwargs)
+        mock_namespace = {k: MagicMock() for k in namespace
+                          if not (k.startswith('__') and k.endswith('__'))}
+        mock_c_rebuilt = deserialize_callable_in_namespace(
+            serialized_c.name, serialized_c.source, mock_namespace)
+        test_callable(mock_c_rebuilt)
         print('callable was successfully rebuilt')
     else:
         print('callable is in namespace - no need to test')
     return serialized_c
 
 
-# def test_callable(c, namespace, args=None, kwargs=None):
-#     if kwargs is None:
-#         kwargs = {}
-#     if args is None:
-#         # user is not supplying args, so we need to mock
-#         nargs = len(getargspec(c).args)
-#         args = [Mock() for _ in range(nargs)]
-#
-#         # Store original __import__
-#         orig_import = __import__
-#
-#         def import_mock(name, *args):
-#             print('using import_mock')
-#             #orig_import(name, globals=namespace)
-#             return Mock()
-#         __import__ = import_mock
-#         c(*args, **kwargs)
-#     else:
-#         c(*args, **kwargs)
+def test_callable(c):
+    nargs = len(getargspec(c).args)
+    args = [MagicMock() for _ in range(nargs)]
+    print('args are: {}'.format(args))
+
+    # Store original __import__
+    orig_import = __import__
+
+    def import_mock(name, *args):
+        print('using import_mock')
+        orig_import(name)
+        return MagicMock()
+
+    with patch('__builtin__.__import__', side_effect=import_mock):
+        c(*args)
 
 
 def serialize_callable(c, modules):
@@ -77,6 +80,10 @@ def serialize_callable(c, modules):
 
 def deserialize_callable(name, source, modules):
     namespace = namespace_for_modules([str_to_module(m) for m in modules])
+    return deserialize_callable_in_namespace(name, source, namespace)
+
+
+def deserialize_callable_in_namespace(name, source, namespace):
     if source is None:
         # must be directly in namespace
         return namespace[name]

@@ -7,8 +7,7 @@ import sys
 import numpy as np
 import h5py
 
-from .callable import (serialize_callable, serialize_callable_and_test,
-                       deserialize_callable)
+from .callable import serialize_callable_and_test, deserialize_callable
 
 
 isPython2 = sys.version_info.major == 2
@@ -177,33 +176,18 @@ class HDF5able(object):
 
 class SerializableCallable(HDF5able):
 
-    def __init__(self, f, modules):
-        self.f = f
+    def __init__(self, callable, modules):
+        self.callable = callable
         self.modules = modules
 
     def h5_dict_to_serializable_dict(self):
-        serialized_c = serialize_callable_and_test(self.f, self.modules)
+        serialized_c = serialize_callable_and_test(self.callable, self.modules)
         return serialized_c._asdict()
 
     @classmethod
     def h5_rebuild_from_dict(cls, d):
         # just return directly the function
         return deserialize_callable(**d)
-
-
-class TestedSerializableCallable(SerializableCallable):
-
-    def __init__(self, f, modules, testargs=None, testkwargs=None):
-        SerializableCallable.__init__(self, f, modules)
-        self.testargs = testargs
-        self.testkwargs = testkwargs
-
-    def h5_dict_to_serializable_dict(self):
-        serialized_c = serialize_callable_and_test(self.f,
-                                                   self.modules,
-                                                   args=self.testargs,
-                                                   kwargs=self.testkwargs)
-        return serialized_c._asdict()
 
 
 attr_key_type = u'type'
