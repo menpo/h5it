@@ -18,6 +18,9 @@ test:
   imports:
     - hdf5able
 
+  commands:
+    - python -c "import nose; nose.main()" -s hdf5able
+
 about:
   home: https://github.com/menpo/hdf5able/
   license: BSD License

@@ -2,27 +2,47 @@ import inspect
 import importlib
 from collections import namedtuple
 from functools import partial
+from mock import Mock, patch
+from inspect import getargspec
 
 SerializedCallable = namedtuple('SerializedCallable',
                                 ['name', 'source', 'modules'])
 
 
 def serialize_callable_and_test(c, modules, args=None, kwargs=None):
-    if args is None:
-        args = ()
-    if kwargs is None:
-        kwargs = {}
     # save the callable down
     serialized_c = serialize_callable(c, modules)
     # attempt to re-serialize
     c_rebuilt = deserialize_callable(*serialized_c)
     if serialized_c.source is not None:
         # test the callable
-        c_rebuilt(*args, **kwargs)
+        namespace = namespace_for_modules(modules)
+        #test_callable(c_rebuilt, namespace, args, kwargs)
         print('callable was successfully rebuilt')
     else:
         print('callable is in namespace - no need to test')
     return serialized_c
+
+
+def test_callable(c, namespace, args=None, kwargs=None):
+    if kwargs is None:
+        kwargs = {}
+    if args is None:
+        # user is not supplying args, so we need to mock
+        nargs = len(getargspec(c).args)
+        args = [Mock() for _ in range(nargs)]
+
+        # Store original __import__
+        orig_import = __import__
+
+        def import_mock(name, *args):
+            print('using import_mock')
+            #orig_import(name, globals=namespace)
+            return Mock()
+        __import__ = import_mock
+        c(*args, **kwargs)
+    else:
+        c(*args, **kwargs)
 
 
 def serialize_callable(c, modules):
@@ -32,7 +52,7 @@ def serialize_callable(c, modules):
     # build the inverse mapping for callables {callable: name}
     callable_to_name = {s: n for n, s in name_to_symbol.iteritems()
                         if callable(s)}
-    # see if f is in the module namespace
+    # see if c is in the module namespace
     name = callable_to_name.get(c)
     if name is not None:
         # c is directly in the namespace - easy to serialize.
