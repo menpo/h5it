@@ -192,6 +192,30 @@ def test_load_recursive_list():
     assert type(y) == list
 
 
+def test_load_empty_tuple():
+    x = tuple()
+    save(path, x)
+    y = load(path)
+    assert y == x
+    assert type(y) == tuple
+
+
+def test_load_tuple():
+    x = (1, 'xyx', 15.161)
+    save(path, x)
+    y = load(path)
+    assert y == x
+    assert type(y) == tuple
+
+
+def test_load_recursive_tuple():
+    x = (1, 'xyx', 15.161, (None, {'a': 1}, [1, 3, 4], True))
+    save(path, x)
+    y = load(path)
+    assert y == x
+    assert type(y) == tuple
+
+
 def test_load_empty_dict():
     x = {}
     save(path, x)
