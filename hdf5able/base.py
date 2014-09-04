@@ -37,7 +37,7 @@ def import_list(node):
     ordered = sorted(unordered)
     counts = [x.i for x in ordered]
     items = [x.item for x in ordered]
-    if counts != range(len(counts)):
+    if counts != list(range(len(counts))):
         raise ValueError("Attempted to import a list that is missing elements")
     return items
 
