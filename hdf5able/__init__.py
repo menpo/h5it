@@ -1,4 +1,5 @@
-from .base import (h5import, h5export, HDF5able,
+from .base import (load, save,  # main API for saving and loading files.
+                   HDF5able,    # subclass to make things HDF5able
                    SerializableCallable, TestedSerializableCallable)
 
 from ._version import get_versions

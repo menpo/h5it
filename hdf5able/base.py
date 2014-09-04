@@ -1,22 +1,24 @@
 from collections import namedtuple, OrderedDict
+from numbers import Number
 import importlib
 from enum import Enum
 from pathlib import Path
+
 import numpy as np
 import h5py
 
 from .callable import (serialize_callable, serialize_callable_and_test,
                        deserialize_callable)
 
-# IMPORT
+# ------------------------------ IMPORTS ------------------------------ #
 
 ListItem = namedtuple('ListItem', ['i', 'item'])
 
 
-def h_import_list(node):
+def import_list(node):
     unordered = []
     for i, (j, x) in enumerate(node.iteritems()):
-        unordered.append(ListItem(int(j), h_import(x)))
+        unordered.append(ListItem(int(j), h5_import(x)))
     ordered = sorted(unordered)
     counts = [x.i for x in ordered]
     items = [x.item for x in ordered]
@@ -25,10 +27,10 @@ def h_import_list(node):
     return items
 
 
-def h_import_dict(node):
+def import_dict(node):
     imported_dict = {}
     for k, v in node.iteritems():
-        imported_dict[k] = h_import(v)
+        imported_dict[k] = h5_import(v)
     return imported_dict
 
 
@@ -37,52 +39,52 @@ def h_import_hdf5able(node):
     return cls.h5_rebuild_from_dict(cls.h5_import_as_dict(node))
 
 
-def h_import_ndarray(node):
+def import_ndarray(node):
     return np.array(node)
 
 
-def h_import_none(_):
+def import_none(_):
     return None
 
 
-def h_import_str(node):
-    return str(np.array(node))
+def import_str(node):
+    return unicode(np.array(node))
 
 
-def h_import_bool(node):
-    return node.attrs[AttrKey.bool_value]
+def import_bool(node):
+    return bool(node.attrs[AttrKey.bool_value])
 
 
-def h_import_number(node):
-    return node.attrs[AttrKey.number_value]
+def import_number(node):
+    return np.asscalar(node.attrs[AttrKey.number_value])
 
 
-def h_import_path(node):
-    return Path(str(np.array(node)))
+def import_path(node):
+    return Path(import_str(node))
 
 
-# EXPORT
+# ------------------------------ EXPORTS ------------------------------ #
 
 zero_padded = lambda x: "{:0" + str(len(str(x))) + "}"
 
 
-def h_export_list(parent, l, name):
+def export_list(parent, l, name):
     list_node = parent.create_group(name)
     padded = zero_padded(len(l))
     for i, x in enumerate(l):
-        h_export(list_node, x, padded.format(i))
+        h5_export(list_node, x, padded.format(i))
 
 
-def h_export_dict(parent, d, name):
+def export_dict(parent, d, name):
     dict_node = parent.create_group(name)
     if sum(not isinstance(k, (str, unicode)) for k in d.keys()) != 0:
         raise ValueError("Only dictionaries with string keys can be "
                          "serialized")
     for k, v in d.iteritems():
-        h_export(dict_node, v, str(k))
+        h5_export(dict_node, v, str(k))
 
 
-def h_export_hdf5able(parent, hdf5able, name):
+def export_hdf5able(parent, hdf5able, name):
     # Objects behave a lot like dictionaries
     hdf5able.h5_export_as_dict(parent, name)
     # HDF5able added itself to the parent. Grab the node
@@ -91,30 +93,30 @@ def h_export_hdf5able(parent, hdf5able, name):
     node.attrs[AttrKey.hdf5able_cls] = str_of_cls(hdf5able.__class__)
 
 
-def h_export_ndarray(parent, a, name):
+def export_ndarray(parent, a, name):
     # fletcher32 is a checksum, lzf is fast OK compression
     parent.create_dataset(name, data=a, compression='lzf', fletcher32=True)
 
 
-def h_export_none(parent, _, name):
+def export_none(parent, _, name):
     parent.create_group(name)  # A blank group
 
 
-def h_export_str(parent, s, name):
+def export_str(parent, s, name):
     parent.create_dataset(name, data=s)
 
 
-def h_export_bool(parent, a_bool, name):
+def export_bool(parent, a_bool, name):
     group = parent.create_group(name)  # A blank group
     group.attrs[AttrKey.bool_value] = a_bool
 
 
-def h_export_number(parent, a_number, name):
+def export_number(parent, a_number, name):
     group = parent.create_group(name)  # A blank group
     group.attrs[AttrKey.number_value] = a_number
 
 
-def h_export_path(parent, path, name):
+def export_path(parent, path, name):
     parent.create_dataset(name, data=str(path))
 
 
@@ -143,10 +145,10 @@ class HDF5able(object):
     @classmethod
     def h5_import_as_dict(cls, node):
         # default behavior - import this node as a dict
-        return h_import_dict(node)
+        return import_dict(node)
 
     def h5_export_as_dict(self, parent, name):
-        h_export_dict(parent, self.h5_dict_representation(), name)
+        export_dict(parent, self.h5_dict_representation(), name)
 
 
 class SerializableCallable(HDF5able):
@@ -156,7 +158,7 @@ class SerializableCallable(HDF5able):
         self.modules = modules
 
     def h5_dict_representation(self):
-        serialized_c = serialize_callable(self.f, self.modules)
+        serialized_c = serialize_callable_and_test(self.f, self.modules)
         return serialized_c._asdict()
 
     @classmethod
@@ -190,17 +192,16 @@ class AttrKey(Enum):
 top_level_key = 'hdf5able'
 T = namedtuple('T', ["type", "str", "importer", "exporter"])
 
-from numbers import Number
 
-types = [T(list, "list", h_import_list, h_export_list),
-         T(dict, "dict", h_import_dict, h_export_dict),
-         T(HDF5able, "HDF5able", h_import_hdf5able, h_export_hdf5able),
-         T(np.ndarray, "ndarray", h_import_ndarray, h_export_ndarray),
-         T(type(None), "NoneType", h_import_none, h_export_none),
-         T((str, unicode), "unicode", h_import_str, h_export_str),
-         T(bool, "bool", h_import_bool, h_export_bool),
-         T(Path, "pathlib.Path", h_import_path, h_export_path),
-         T(Number, "Number", h_import_number, h_export_number)]
+types = [T(list, "list", import_list, export_list),
+         T(dict, "dict", import_dict, export_dict),
+         T(HDF5able, "HDF5able", h_import_hdf5able, export_hdf5able),
+         T(np.ndarray, "ndarray", import_ndarray, export_ndarray),
+         T(type(None), "NoneType", import_none, export_none),
+         T((str, unicode), "unicode", import_str, export_str),
+         T(bool, "bool", import_bool, export_bool),
+         T(Path, "pathlib.Path", import_path, export_path),
+         T(Number, "Number", import_number, export_number)]
 
 type_to_exporter = OrderedDict()
 str_to_importer = OrderedDict()
@@ -212,17 +213,7 @@ for t in types:
     type_to_str[t.type] = t.str
 
 
-def h5export(path, x):
-    with h5py.File(path, "w") as f:
-        h_export(f, x, top_level_key)
-
-
-def h5import(path):
-    with h5py.File(path, "r") as f:
-        return h_import(f[top_level_key])
-
-
-def h_import(node):
+def h5_import(node):
     Type = node.attrs.get(AttrKey.type)
     if Type is not None:
         # node type is specific
@@ -233,7 +224,7 @@ def h_import(node):
             print("Don't know how to import type {}".format(Type))
 
 
-def h_export(parent, x, name):
+def h5_export(parent, x, name):
     for Type, exporter in type_to_exporter.items():
         if isinstance(x, Type):
             exporter(parent, x, name)
@@ -242,3 +233,13 @@ def h_export(parent, x, name):
             return
     raise ValueError("Cannot export {} named "
                      "'{}' of type {}".format(x, name, type(x)))
+
+
+def save(path, x):
+    with h5py.File(path, "w") as f:
+        h5_export(f, x, top_level_key)
+
+
+def load(path):
+    with h5py.File(path, "r") as f:
+        return h5_import(f[top_level_key])
