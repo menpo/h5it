@@ -2,8 +2,8 @@ import inspect
 import importlib
 from collections import namedtuple
 from functools import partial
-from mock import Mock, patch
-from inspect import getargspec
+#from mock import Mock, patch
+#from inspect import getargspec
 
 SerializedCallable = namedtuple('SerializedCallable',
                                 ['name', 'source', 'modules'])
@@ -24,25 +24,25 @@ def serialize_callable_and_test(c, modules, args=None, kwargs=None):
     return serialized_c
 
 
-def test_callable(c, namespace, args=None, kwargs=None):
-    if kwargs is None:
-        kwargs = {}
-    if args is None:
-        # user is not supplying args, so we need to mock
-        nargs = len(getargspec(c).args)
-        args = [Mock() for _ in range(nargs)]
-
-        # Store original __import__
-        orig_import = __import__
-
-        def import_mock(name, *args):
-            print('using import_mock')
-            #orig_import(name, globals=namespace)
-            return Mock()
-        __import__ = import_mock
-        c(*args, **kwargs)
-    else:
-        c(*args, **kwargs)
+# def test_callable(c, namespace, args=None, kwargs=None):
+#     if kwargs is None:
+#         kwargs = {}
+#     if args is None:
+#         # user is not supplying args, so we need to mock
+#         nargs = len(getargspec(c).args)
+#         args = [Mock() for _ in range(nargs)]
+#
+#         # Store original __import__
+#         orig_import = __import__
+#
+#         def import_mock(name, *args):
+#             print('using import_mock')
+#             #orig_import(name, globals=namespace)
+#             return Mock()
+#         __import__ = import_mock
+#         c(*args, **kwargs)
+#     else:
+#         c(*args, **kwargs)
 
 
 def serialize_callable(c, modules):
