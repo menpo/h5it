@@ -7,7 +7,7 @@ from pathlib import Path, PosixPath
 
 from hdf5able import save, load
 
-from .base import isPython2
+from .base import isPython2, u
 
 if isPython2:
     unicode_type = unicode
@@ -131,7 +131,7 @@ def test_load_byte_str():
     x = b"some byte str"
     save(path, x)
     y = load(path)
-    assert y == x
+    assert y == u(x)
     assert type(y) == unicode_type
 
 
@@ -185,7 +185,7 @@ def test_load_list():
 
 
 def test_load_recursive_list():
-    x = [1, 'a', None, True, [b'another', -125.14]]
+    x = [1, 'a', None, True, ['another', -125.14]]
     save(path, x)
     y = load(path)
     assert y == x
