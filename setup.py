@@ -20,5 +20,4 @@ setup(name=project_name,
       packages=find_packages(),
       install_requires=['numpy>=1.8.2',
                         'h5py>=2.3.0',
-                        'pathlib>=1.0',
-                        'enum>=0.4.4'])
+                        'pathlib>=1.0'])

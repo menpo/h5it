@@ -1,7 +1,6 @@
 from collections import namedtuple, OrderedDict
 from numbers import Number
 import importlib
-from enum import Enum
 from pathlib import Path
 import sys
 
@@ -55,7 +54,7 @@ def import_dict(node):
 
 
 def h_import_hdf5able(node):
-    cls = import_hdf5able(node.attrs[AttrKey.hdf5able_cls])
+    cls = import_hdf5able(node.attrs[attr_key_hdf5able_cls])
     return cls.h5_rebuild_from_dict(cls.h5_import_as_dict(node))
 
 
@@ -72,11 +71,11 @@ def import_str(node):
 
 
 def import_bool(node):
-    return bool(node.attrs[AttrKey.bool_value])
+    return bool(node.attrs[attr_key_bool_value])
 
 
 def import_number(node):
-    return np.asscalar(node.attrs[AttrKey.number_value])
+    return np.asscalar(node.attrs[attr_key_number_value])
 
 
 def import_path(node):
@@ -110,7 +109,7 @@ def export_hdf5able(parent, hdf5able, name):
     # HDF5able added itself to the parent. Grab the node
     node = parent[name]
     # And set the attribute so it can be decoded.
-    node.attrs[AttrKey.hdf5able_cls] = str_of_cls(hdf5able.__class__)
+    node.attrs[attr_key_hdf5able_cls] = str_of_cls(hdf5able.__class__)
 
 
 def export_ndarray(parent, a, name):
@@ -128,12 +127,12 @@ def export_str(parent, s, name):
 
 def export_bool(parent, a_bool, name):
     group = parent.create_group(name)  # A blank group
-    group.attrs[AttrKey.bool_value] = a_bool
+    group.attrs[attr_key_bool_value] = a_bool
 
 
 def export_number(parent, a_number, name):
     group = parent.create_group(name)  # A blank group
-    group.attrs[AttrKey.number_value] = a_number
+    group.attrs[attr_key_number_value] = a_number
 
 
 def export_path(parent, path, name):
@@ -202,11 +201,10 @@ class TestedSerializableCallable(SerializableCallable):
         return serialized_c._asdict()
 
 
-class AttrKey(Enum):
-    type = 'type'
-    hdf5able_cls = 'cls'
-    bool_value = 'bool_value'
-    number_value = 'number_value'
+attr_key_type = u'type'
+attr_key_hdf5able_cls = u'cls'
+attr_key_number_value = u'number_value'
+attr_key_bool_value = u'bool_value'
 
 
 top_level_key = 'hdf5able'
@@ -235,7 +233,7 @@ for t in types:
 
 
 def h5_import(node):
-    Type = node.attrs.get(AttrKey.type)
+    Type = node.attrs.get(attr_key_type)
     if Type is not None:
         # node type is specific
         importer = str_to_importer.get(Type)
@@ -250,7 +248,7 @@ def h5_export(parent, x, name):
         if isinstance(x, Type):
             exporter(parent, x, name)
             new_node = parent[name]
-            new_node.attrs[AttrKey.type] = type_to_str[Type]
+            new_node.attrs[attr_key_type] = type_to_str[Type]
             return
     raise ValueError("Cannot export {} named "
                      "'{}' of type {}".format(x, name, type(x)))

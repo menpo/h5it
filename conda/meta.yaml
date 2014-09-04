@@ -12,8 +12,7 @@ requirements:
     - numpy
     - h5py
     - pathlib # [not py3k]
-    - enum    # [not py3k]
-	
+
 test:
   requires:
   - nose
