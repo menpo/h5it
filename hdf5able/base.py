@@ -17,7 +17,7 @@ isPython2 = sys.version_info.major == 2
 if isPython2:
     strTypes = (str, unicode)
 else:
-    strTypes = (unicode, bytes)
+    strTypes = (str, bytes)
 
 
 def u(s):
