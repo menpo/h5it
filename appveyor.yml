@@ -1,11 +1,10 @@
 build: false
 
 environment:
-  BINSTAR_USER: menpo
-  BINSTAR_KEY:
-    secure: +898Jq8ABUvA4m0m/9QaGB12v1SLy1WJAhW20irIFuDtWl6RVuEVuGRBzhDpKqko
-
-environment:
+  global:
+    BINSTAR_USER: menpo
+    BINSTAR_KEY:
+      secure: +898Jq8ABUvA4m0m/9QaGB12v1SLy1WJAhW20irIFuDtWl6RVuEVuGRBzhDpKqko
   matrix:
     - PYTHON_VERSION: 2
     - PYTHON_VERSION: 3
