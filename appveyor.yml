@@ -18,5 +18,5 @@ init:
 install:
 - ps: "git describe --tags"
 - ps: "$HDF5ABLE_VERSION= python C:\\traviconda.py version; [Environment]::SetEnvironmentVariable(\"HDF5ABLE_VERSION\", $HDF5ABLE_VERSION, \"Machine\")"
-- ps: "Get-ChildItem Env:"
+- ps: "[Environment]::GetEnvironmentVariable(\"HDF5ABLE_VERSION\", \"Machine\")"
 - cmd: C:\\Miniconda\\python C:\\traviconda.py auto ./conda --binstaruser menpo --binstarkey tehehe
