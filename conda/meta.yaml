@@ -1,6 +1,6 @@
 package:
   name: hdf5able
-  version: {{ environ['HDF5ABLE_VERSION'] }}
+  version: {{ environ['TC_PACKAGE_VERSION'] }}
 
 requirements:
   build:
