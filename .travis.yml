@@ -1,18 +1,17 @@
 env:
   global:
-    secure: H+BYasgSxi3eDq6Nw17O+joRzYffbH5X2drt/ZX18JjYIkpwpGuB1bUEx+94Mdvq5uaISgUUDT6Kz4rE4d5iy/vtcflfW+AXuTVR4AOt3GqzxHZvJRJ24kccazFuSiH7wiYD1/7G/B6CV+etwu6dayKfIqAkauBEkdRzFldiSww=
+    - BINSTAR_USER: menpo
   matrix:
   - PYTHON_VERSION=2
   - PYTHON_VERSION=3
 
 install:
 - wget https://raw.githubusercontent.com/jabooth/traviconda/master/traviconda.py -O traviconda.py
-- python traviconda.py setup $PYTHON_VERSION --channel menpo
-- export HDF5ABLE_VERSION=$(python traviconda.py version)
-- export PATH=/home/travis/miniconda/bin:$PATH
+- python traviconda.py setup $PYTHON_VERSION --channel $BINSTAR_USER
+- export PATH=$HOME/miniconda/bin:$PATH
 
 script:
-- python traviconda.py auto ./conda --binstaruser menpo --binstarkey $BINSTAR_KEY --pypiuser $PYPI_USERNAME  --pypipassword $PYPI_PASSWORD
+- python traviconda.py auto ./conda --binstaruser $BINSTAR_USER --binstarkey $BINSTAR_KEY --pypiuser $PYPI_USERNAME  --pypipassword $PYPI_PASSWORD
 
 notifications:
   email: false

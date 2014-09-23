@@ -1,6 +1,9 @@
-# AppVeyor.com is a Continuous Integration service to build and run tests under
-# Windows
 build: false
+
+environment:
+  BINSTAR_USER: menpo
+  BINSTAR_KEY:
+    secure: +898Jq8ABUvA4m0m/9QaGB12v1SLy1WJAhW20irIFuDtWl6RVuEVuGRBzhDpKqko
 
 environment:
   matrix:
@@ -13,7 +16,7 @@ platform:
 
 init:
 - ps: Start-FileDownload 'https://raw.githubusercontent.com/jabooth/traviconda/master/traviconda.py' C:\\traviconda.py; echo "Done"
-- cmd: python C:\\traviconda.py setup %PYTHON_VERSION% --channel menpo
+- cmd: python C:\\traviconda.py setup %PYTHON_VERSION% --channel %BINSTAR_USER%
 
 install:
-- cmd: C:\\Miniconda\\python C:\\traviconda.py auto ./conda --binstaruser menpo --binstarkey tehehe
+- cmd: C:\\Miniconda\\python C:\\traviconda.py auto ./conda --binstaruser %BINSTAR_USER% --binstarkey %BINSTAR_KEY%
