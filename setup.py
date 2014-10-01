@@ -13,12 +13,12 @@ versioneer.tag_prefix = 'v'  # tags are like v1.2.0
 versioneer.parentdir_prefix = project_name + '-'  # dirname like 'menpo-v1.2.0'
 
 
-requirements = ['numpy>=1.8.2',
-                'h5py>=2.3.0']
+requirements = ['numpy==1.9.0',
+                'h5py==2.3.1']
 
 if sys.version_info.major == 2:
-    requirements.extend(['pathlib>=1.0',
-                         'mock>=1.0.1'])
+    requirements.extend(['pathlib==1.0',
+                         'mock==1.0.1'])
 
 setup(name=project_name,
       version=versioneer.get_version(),
