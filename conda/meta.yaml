@@ -9,7 +9,7 @@ requirements:
 
   run:
     - python
-    - numpy 1.9*
+    - numpy 1.9.0
     - h5py 2.3.1
     - pathlib 1.0 # [not py3k]
     - mock  1.0.1 # [not py3k]
