@@ -29,10 +29,11 @@ def u(s):
 ListItem = namedtuple('ListItem', ['i', 'item'])
 
 
-def load_list(node):
+def load_list(parent, name, memo):
+    node = parent[name]
     unordered = []
-    for i, (j, x) in enumerate(node.items()):
-        unordered.append(ListItem(int(j), h5_import(x)))
+    for i, j in enumerate(node.keys()):
+        unordered.append(ListItem(int(j), h5_import(node, j, memo)))
     ordered = sorted(unordered)
     counts = [x.i for x in ordered]
     items = [x.item for x in ordered]
@@ -41,47 +42,49 @@ def load_list(node):
     return items
 
 
-def load_tuple(node):
-    return tuple(load_list(node))
+def load_tuple(parent, name, memo):
+    return tuple(load_list(parent, name, memo))
 
 
-def load_dict(node):
+def load_dict(parent, name, memo):
+    node = parent[name]
     imported_dict = {}
-    for k, v in node.items():
-        imported_dict[k] = h5_import(v)
+    for k in node.keys():
+        imported_dict[k] = h5_import(node, k, memo)
     return imported_dict
 
 
-def load_hdf5able(node):
+def load_hdf5able(parent, name, memo):
+    node = parent[name]
     cls = import_hdf5able(node.attrs[attr_key_hdf5able_cls])
-    serialized_d = load_dict(node)
+    serialized_d = load_dict(parent, name, memo)
     version = node.attrs[attr_key_hdf5able_version]
     d = cls.h5_dict_from_serialized_dict(serialized_d, version)
     return cls.h5_rebuild_from_dict(d)
 
 
-def load_ndarray(node):
-    return np.array(node)
+def load_ndarray(parent, name, _):
+    return np.array(parent[name])
 
 
-def load_none(_):
+def load_none(parent, name, _):
     return None
 
 
-def load_str(node):
-    return u(np.array(node))
+def load_str(parent, name, _):
+    return u(np.array(parent[name]))
 
 
-def load_bool(node):
-    return bool(node.attrs[attr_key_bool_value])
+def load_bool(parent, name, _):
+    return bool(parent[name].attrs[attr_key_bool_value])
 
 
-def load_number(node):
-    return np.asscalar(node.attrs[attr_key_number_value])
+def load_number(parent, name, _):
+    return np.asscalar(parent[name].attrs[attr_key_number_value])
 
 
-def load_path(node):
-    return Path(load_str(node))
+def load_path(parent, name, _):
+    return Path(load_str(parent, name, _))
 
 
 # ------------------------------ EXPORTS ------------------------------ #
@@ -89,26 +92,26 @@ def load_path(node):
 zero_padded = lambda x: "{:0" + u(len(u(x))) + "}"
 
 
-def save_list(parent, l, name):
+def save_list(parent, l, name, memo):
     list_node = parent.create_group(name)
     padded = zero_padded(len(l))
     for i, x in enumerate(l):
-        h5_export(list_node, x, padded.format(i))
+        h5_export(list_node, x, padded.format(i), memo)
 
 
-def save_dict(parent, d, name):
+def save_dict(parent, d, name, memo):
     dict_node = parent.create_group(name)
     if sum(not isinstance(k, strTypes) for k in d.keys()) != 0:
         raise ValueError("Only dictionaries with string keys can be "
                          "serialized")
     for k, v in d.items():
-        h5_export(dict_node, v, str(k))
+        h5_export(dict_node, v, str(k), memo)
 
 
-def save_hdf5able(parent, hdf5able, name):
+def save_hdf5able(parent, hdf5able, name, memo):
     # Objects behave a lot like dictionaries
     d = hdf5able.h5_dict_to_serializable_dict()
-    save_dict(parent, d, name)
+    save_dict(parent, d, name, memo)
     # HDF5able added itself to the parent. Grab the node
     node = parent[name]
     # And set the attribute so it can be decoded.
@@ -116,30 +119,30 @@ def save_hdf5able(parent, hdf5able, name):
     node.attrs[attr_key_hdf5able_version] = hdf5able.h5_version
 
 
-def save_ndarray(parent, a, name):
+def save_ndarray(parent, a, name, _):
     # fletcher32 is a checksum, gzip compression is supported by Matlab
     parent.create_dataset(name, data=a, compression='gzip', fletcher32=True)
 
 
-def save_none(parent, _, name):
+def save_none(parent, none, name, _):
     parent.create_group(name)  # A blank group
 
 
-def save_str(parent, s, name):
+def save_str(parent, s, name, _):
     parent.create_dataset(name, data=s)
 
 
-def save_bool(parent, a_bool, name):
+def save_bool(parent, a_bool, name, _):
     group = parent.create_group(name)  # A blank group
     group.attrs[attr_key_bool_value] = a_bool
 
 
-def save_number(parent, a_number, name):
+def save_number(parent, a_number, name, _):
     group = parent.create_group(name)  # A blank group
     group.attrs[attr_key_number_value] = a_number
 
 
-def save_path(parent, path, name):
+def save_path(parent, path, name, _):
     parent.create_dataset(name, data=u(path))
 
 
@@ -222,23 +225,51 @@ for t in types:
     type_to_str[t.type] = t.str
 
 
-def h5_import(node):
+def link_path_if_softlink(node, name):
+    if node.get(name, getclass=True, getlink=True) == h5py.SoftLink:
+        # this node is a softlink - grab it's path
+        return node.get(name, getlink=True).path
+
+
+def h5_import(parent, name, memo):
+    link_path = link_path_if_softlink(parent, name)
+    if link_path is not None:
+        # this node is a softlink - memoize the link destination path
+        memo_path = link_path
+    else:
+        memo_path = parent[name].name
+    if memo_path in memo:
+        # this object has already been loaded - just return it
+        return memo[memo_path]
+    node = parent[name]
     Type = node.attrs.get(attr_key_type)
     if Type is not None:
         # node type is specific
         importer = str_to_importer.get(Type)
         if importer is not None:
-            return importer(node)
+            obj = importer(parent, name, memo)
+            # remember we imported this already
+            memo[memo_path] = obj
+            return obj
         else:
-            raise ValueError("Don't know how to import type {}".format(Type))
+            raise ValueError("Don't know how to import type {}"
+                             " for node {}".format(Type, node))
+    else:
+        raise ValueError("Cannot find Type attribute on {}".format(node))
 
 
-def h5_export(parent, x, name):
+def h5_export(parent, x, name, memo):
+    if id(x) in memo:
+        # this object is already exported, just softlink to it.
+        parent[name] = h5py.SoftLink(memo[id(x)].name)
+        return
     for Type, exporter in type_to_exporter.items():
         if isinstance(x, Type):
-            exporter(parent, x, name)
+            exporter(parent, x, name, memo)
             new_node = parent[name]
             new_node.attrs[attr_key_type] = type_to_str[Type]
+            # remember we have exported this object
+            memo[id(x)] = new_node
             return
     raise ValueError("Cannot export {} named "
                      "'{}' of type {}".format(x, name, type(x)))
@@ -246,9 +277,9 @@ def h5_export(parent, x, name):
 
 def save(path, x):
     with h5py.File(path, "w") as f:
-        h5_export(f, x, top_level_key)
+        h5_export(f, x, top_level_key, {})
 
 
 def load(path):
     with h5py.File(path, "r") as f:
-        return h5_import(f[top_level_key])
+        return h5_import(f, top_level_key, {})
