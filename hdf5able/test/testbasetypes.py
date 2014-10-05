@@ -81,7 +81,6 @@ def test_save_empty_dict():
     save(path, {})
 
 
-@raises(ValueError)
 def test_save_dict_with_non_string_keys():
     save(path, {1: 'a', None: True})
 
@@ -234,9 +233,25 @@ def test_load_dict():
     assert type(y) == dict
 
 
+def test_load_dict_with_non_string_keys():
+    x = {1: 'a', None: True}
+    save(path, x)
+    y = load(path)
+    assert y == x
+
+
 def test_load_recursive_dict():
     x = {'b': 2, 'c': True, 'd': [1, None, {'key': 2.5012343}]}
     save(path, x)
     y = load(path)
     assert y == x
     assert type(y) == dict
+
+
+def test_load_reference():
+    c = [1, 2, 3]
+    a = {'c_from_a': c}
+    b = {'c_from_b': c}
+    save('test.hdf5', (a, b))
+    a_l, b_l = load('test.hdf5')
+    assert id(a_l['c_from_a']) == id(b_l['c_from_b'])

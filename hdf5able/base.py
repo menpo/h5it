@@ -46,7 +46,7 @@ def load_tuple(parent, name, memo):
     return tuple(load_list(parent, name, memo))
 
 
-def load_dict(parent, name, memo):
+def load_unicode_dict(parent, name, memo):
     node = parent[name]
     imported_dict = {}
     for k in node.keys():
@@ -54,10 +54,15 @@ def load_dict(parent, name, memo):
     return imported_dict
 
 
+def load_dict(parent, name, memo):
+    node = parent[name]
+    return dict(h5_import(node, k, memo) for k in node.keys())
+
+
 def load_hdf5able(parent, name, memo):
     node = parent[name]
     cls = import_hdf5able(node.attrs[attr_key_hdf5able_cls])
-    serialized_d = load_dict(parent, name, memo)
+    serialized_d = load_unicode_dict(parent, name, memo)
     version = node.attrs[attr_key_hdf5able_version]
     d = cls.h5_dict_from_serialized_dict(serialized_d, version)
     return cls.h5_rebuild_from_dict(d)
@@ -99,7 +104,7 @@ def save_list(parent, l, name, memo):
         h5_export(list_node, x, padded.format(i), memo)
 
 
-def save_dict(parent, d, name, memo):
+def save_unicode_dict(parent, d, name, memo):
     dict_node = parent.create_group(name)
     if sum(not isinstance(k, strTypes) for k in d.keys()) != 0:
         raise ValueError("Only dictionaries with string keys can be "
@@ -108,10 +113,16 @@ def save_dict(parent, d, name, memo):
         h5_export(dict_node, v, str(k), memo)
 
 
+def save_dict(parent, d, name, memo):
+    dict_node = parent.create_group(name)
+    for k, v in d.items():
+        h5_export(dict_node, (k, v), str(hash(k)), memo)
+
+
 def save_hdf5able(parent, hdf5able, name, memo):
     # Objects behave a lot like dictionaries
     d = hdf5able.h5_dict_to_serializable_dict()
-    save_dict(parent, d, name, memo)
+    save_unicode_dict(parent, d, name, memo)
     # HDF5able added itself to the parent. Grab the node
     node = parent[name]
     # And set the attribute so it can be decoded.
