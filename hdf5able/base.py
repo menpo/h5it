@@ -59,6 +59,11 @@ def load_dict(parent, name, memo):
     return dict(h5_import(node, k, memo) for k in node.keys())
 
 
+def load_set(parent, name, memo):
+    node = parent[name]
+    return set(h5_import(node, k, memo) for k in node.keys())
+
+
 def load_hdf5able(parent, name, memo):
     node = parent[name]
     cls = import_hdf5able(node.attrs[attr_key_hdf5able_cls])
@@ -117,6 +122,12 @@ def save_dict(parent, d, name, memo):
     dict_node = parent.create_group(name)
     for k, v in d.items():
         h5_export(dict_node, (k, v), str(hash(k)), memo)
+
+
+def save_set(parent, s, name, memo):
+    set_node = parent.create_group(name)
+    for x in s:
+        h5_export(set_node, x, str(hash(x)), memo)
 
 
 def save_hdf5able(parent, hdf5able, name, memo):
@@ -218,6 +229,7 @@ T = namedtuple('T', ["type", "str", "importer", "exporter"])
 types = [T(list, "list", load_list, save_list),
          T(tuple, "tuple", load_tuple, save_list),  # export is as list
          T(dict, "dict", load_dict, save_dict),
+         T(set, "set", load_set, save_set),
          T(HDF5able, "HDF5able", load_hdf5able, save_hdf5able),
          T(np.ndarray, "ndarray", load_ndarray, save_ndarray),
          T(type(None), "NoneType", load_none, save_none),

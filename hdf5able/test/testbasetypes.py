@@ -2,8 +2,7 @@ from __future__ import unicode_literals
 import tempfile
 
 import numpy as np
-from nose.tools import raises
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 from hdf5able import save, load
 from hdf5able.base import isPython2, u
@@ -91,6 +90,10 @@ def test_save_dict():
 
 def test_save_dict_recursive():
     save(path, {'b': 2, 'c': True, 'd': [1, None, {'key': 2.5012343}]})
+
+
+def test_save_set():
+    save(path, {'b', True, 'd', 1, None, ('key', 2.5012343)})
 
 
 def test_load_integer():
@@ -246,6 +249,14 @@ def test_load_recursive_dict():
     y = load(path)
     assert y == x
     assert type(y) == dict
+
+
+def test_load_set():
+    x = {'b', True, 'd', 1, None, ('key', 2.5012343)}
+    save(path, x)
+    y = load(path)
+    assert y == x
+    assert type(y) == set
 
 
 def test_load_reference():
