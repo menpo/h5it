@@ -1,7 +1,7 @@
 from collections import namedtuple, OrderedDict
 from numbers import Number
 import importlib
-from pathlib import Path
+from pathlib import PosixPath
 import sys
 
 import numpy as np
@@ -66,7 +66,7 @@ def load_set(parent, name, memo):
 
 def load_hdf5able(parent, name, memo):
     node = parent[name]
-    cls = import_hdf5able(node.attrs[attr_key_hdf5able_cls])
+    cls = import_symbol(node.attrs[attr_key_instance_cls])
     serialized_d = load_unicode_dict(parent, name, memo)
     version = node.attrs[attr_key_hdf5able_version]
     d = cls.h5_dict_from_serialized_dict(serialized_d, version)
@@ -130,15 +130,14 @@ def save_set(parent, s, name, memo):
         h5_export(set_node, x, str(hash(x)), memo)
 
 
-def save_hdf5able(parent, hdf5able, name, memo):
+def save_instance(parent, instance, name, memo):
     # Objects behave a lot like dictionaries
-    d = hdf5able.h5_dict_to_serializable_dict()
+    d = instance.h5_dict_to_serializable_dict()
     save_unicode_dict(parent, d, name, memo)
     # HDF5able added itself to the parent. Grab the node
     node = parent[name]
     # And set the attribute so it can be decoded.
-    node.attrs[attr_key_hdf5able_cls] = str_of_cls(hdf5able.__class__)
-    node.attrs[attr_key_hdf5able_version] = hdf5able.h5_version
+    node.attrs[attr_key_instance_cls] = str_of_cls(instance.__class__)
 
 
 def save_ndarray(parent, a, name, _):
@@ -171,11 +170,11 @@ def save_path(parent, path, name, _):
 str_of_cls = lambda x: "{}.{}".format(x.__module__, x.__name__)
 
 
-def import_hdf5able(name):
-    callable_name = name.split('.')[-1]
+def import_symbol(name):
+    symbol_name = name.split('.')[-1]
     module_name = '.'.join(name.split('.')[:-1])
     m = importlib.import_module(module_name)
-    return m.__getattribute__(callable_name)
+    return m.__getattribute__(symbol_name)
 
 
 class HDF5able(object):
@@ -216,7 +215,7 @@ class SerializableCallable(HDF5able):
 
 
 attr_key_type = u'type'
-attr_key_hdf5able_cls = u'cls'
+attr_key_instance_cls = u'cls'
 attr_key_number_value = u'number_value'
 attr_key_bool_value = u'bool_value'
 attr_key_hdf5able_version = u'hdf5able_version'
@@ -230,22 +229,31 @@ types = [T(list, "list", load_list, save_list),
          T(tuple, "tuple", load_tuple, save_list),  # export is as list
          T(dict, "dict", load_dict, save_dict),
          T(set, "set", load_set, save_set),
-         T(HDF5able, "HDF5able", load_hdf5able, save_hdf5able),
          T(np.ndarray, "ndarray", load_ndarray, save_ndarray),
          T(type(None), "NoneType", load_none, save_none),
          T(strTypes, "unicode", load_str, save_str),
          T(bool, "bool", load_bool, save_bool),
-         T(Path, "pathlib.Path", load_path, save_path),
-         T(Number, "Number", load_number, save_number)]
+         T(PosixPath, "pathlib.PosixPath", load_path, save_path),
+         T((int, float, complex), "Number", load_number, save_number)]
 
-type_to_exporter = OrderedDict()
-str_to_importer = OrderedDict()
-type_to_str = OrderedDict()
+type_to_exporter = dict()
+str_to_importer = dict()
+type_to_str = dict()
 
 for t in types:
-    type_to_exporter[t.type] = t.exporter
+    # tuples of types are allowed, just add each type in turn with the same
+    # rule
+    if isinstance(t.type, tuple):
+        for t_i in t.type:
+            type_to_exporter[t_i] = t.exporter
+            type_to_str[t_i] = t.str
+    else:
+        type_to_exporter[t.type] = t.exporter
+        type_to_str[t.type] = t.str
     str_to_importer[t.str] = t.importer
     type_to_str[t.type] = t.str
+
+str_to_importer['instance'] = load_hdf5able
 
 
 def link_path_if_softlink(node, name):
@@ -286,26 +294,37 @@ def h5_export(parent, x, name, memo):
         # this object is already exported, just softlink to it.
         parent[name] = h5py.SoftLink(memo[id(x)].name)
         return
-    for Type, exporter in type_to_exporter.items():
-        if isinstance(x, Type):
-            exporter(parent, x, name, memo)
-            new_node = parent[name]
-            new_node.attrs[attr_key_type] = type_to_str[Type]
-            # remember we have exported this object
-            memo[id(x)] = new_node
-            # make sure that object doesn't die, as otherwise future objects
-            # might reuse the same id. We steal the standard lib approach, and
-            # just append on a special list in the memo (the list is stored on
-            # the hash of the memo, so we are pretty guaranteed that no one
-            # will use it!)
-            try:
-                memo[id(memo)].append(x)
-            except KeyError:
-                # I'm the first!
-                memo[id(memo)] = [x]
-            return
-    raise ValueError("Cannot export {} named "
-                     "'{}' of type {}".format(x, name, type(x)))
+    type_x = type(x)
+    exporter = type_to_exporter.get(type_x)
+    print type(x)
+    print exporter
+    if exporter is None:
+        # hmm hopefully it's an object instance, otherwise we will be unable
+        # to proceed
+        if isinstance(x, object):
+            exporter = save_instance
+            type_str = 'instance'
+        else:
+            raise ValueError("Cannot export {} named "
+                             "'{}' of type {}".format(x, name, type(x)))
+    else:
+        type_str = type_to_str.get(type_x)
+    # definitely have type_str and exporter
+    exporter(parent, x, name, memo)
+    new_node = parent[name]
+    new_node.attrs[attr_key_type] = type_str
+    # remember we have exported this object
+    memo[id(x)] = new_node
+    # make sure that object doesn't die, as otherwise future objects
+    # might reuse the same id. We steal the standard lib approach, and
+    # just append on a special list in the memo (the list is stored on
+    # the hash of the memo, so we are pretty guaranteed that no one
+    # will use it!)
+    try:
+        memo[id(memo)].append(x)
+    except KeyError:
+        # I'm the first!
+        memo[id(memo)] = [x]
 
 
 def save(path, x):
