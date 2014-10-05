@@ -270,6 +270,16 @@ def h5_export(parent, x, name, memo):
             new_node.attrs[attr_key_type] = type_to_str[Type]
             # remember we have exported this object
             memo[id(x)] = new_node
+            # make sure that object doesn't die, as otherwise future objects
+            # might reuse the same id. We steal the standard lib approach, and
+            # just append on a special list in the memo (the list is stored on
+            # the hash of the memo, so we are pretty guaranteed that no one
+            # will use it!)
+            try:
+                memo[id(memo)].append(x)
+            except KeyError:
+                # I'm the first!
+                memo[id(memo)] = [x]
             return
     raise ValueError("Cannot export {} named "
                      "'{}' of type {}".format(x, name, type(x)))
