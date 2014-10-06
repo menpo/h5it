@@ -295,8 +295,6 @@ def h5_export(x, parent, name, memo):
         return
     type_x = type(x)
     exporter = type_to_exporter.get(type_x)
-    print type(x)
-    print exporter
     if exporter is None:
         # hmm hopefully it's an object instance, otherwise we will be unable
         # to proceed
