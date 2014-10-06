@@ -1,8 +1,7 @@
-from collections import namedtuple, OrderedDict
-from numbers import Number
-import importlib
-from pathlib import PosixPath
 import sys
+import importlib
+from collections import namedtuple
+from pathlib import Path, PosixPath
 
 import numpy as np
 import h5py
@@ -10,16 +9,17 @@ import h5py
 from .callable import serialize_callable_and_test, deserialize_callable
 
 
-isPython2 = sys.version_info.major == 2
+isPy2 = sys.version_info.major == 2
+isPy3 = not isPy2
 
-if isPython2:
+if isPy2:
     strTypes = (str, unicode)
 else:
     strTypes = (str, bytes)
 
 
 def u(s):
-    if isPython2:
+    if isPy2:
         return unicode(s)
     else:
         return str(s)
@@ -64,13 +64,33 @@ def load_set(parent, name, memo):
     return set(h5_import(node, k, memo) for k in node.keys())
 
 
-def load_hdf5able(parent, name, memo):
-    node = parent[name]
-    cls = import_symbol(node.attrs[attr_key_instance_cls])
-    serialized_d = load_unicode_dict(parent, name, memo)
-    version = node.attrs[attr_key_hdf5able_version]
-    d = cls.h5_dict_from_serialized_dict(serialized_d, version)
-    return cls.h5_rebuild_from_dict(d)
+def load_instance(parent, name, memo):
+    # import the class and new it up
+    cls = import_symbol(parent[name].attrs[attr_key_instance_cls])
+    inst = cls.__new__(cls)
+
+    state = load_unicode_dict(parent, name, memo)
+    setstate = getattr(inst, "__setstate__", None)
+    if setstate is not None:
+        setstate(state)
+        return inst
+    # we should support slots
+    # slotstate = None
+    # if isinstance(state, tuple) and len(state) == 2:
+    #     state, slotstate = state
+    if state:
+        inst_dict = inst.__dict__
+        if isPy3:
+            intern = sys.intern
+        for k, v in state.items():
+            if isPy3:
+                k = intern(k)
+            inst_dict[k] = v
+    # Again, for future __slot__ support
+    # if slotstate:
+    #     for k, v in slotstate.items():
+    #         setattr(inst, k, v)
+    return inst
 
 
 def load_ndarray(parent, name, _):
@@ -130,11 +150,29 @@ def save_set(parent, s, name, memo):
         h5_export(set_node, x, str(hash(x)), memo)
 
 
+def get_instance_state(x):
+    try:
+        state = x.__getstate__()
+    except AttributeError:
+        state = x.__dict__
+    return state
+
+
+def instance_is_hdf5able(x):
+    return not (hasattr(x, '__getnewargs__') or
+                hasattr(x, '__getnewargs_ex__') or
+                hasattr(x, '__getinitargs__') or
+                x.__class__.__reduce__ != object.__reduce__ or
+                x.__class__.__reduce_ex__ != object.__reduce_ex__)
+
+
 def save_instance(parent, instance, name, memo):
-    # Objects behave a lot like dictionaries
-    d = instance.h5_dict_to_serializable_dict()
+    if not instance_is_hdf5able(instance):
+        raise ValueError('instance {} cannot be saved as it '
+                         'implements unsupported parts of the pickle protocol')
+    d = get_instance_state(instance)
     save_unicode_dict(parent, d, name, memo)
-    # HDF5able added itself to the parent. Grab the node
+    # unicode dict added itself to the parent. Grab the node
     node = parent[name]
     # And set the attribute so it can be decoded.
     node.attrs[attr_key_instance_cls] = str_of_cls(instance.__class__)
@@ -198,27 +236,25 @@ class HDF5able(object):
         return 1
 
 
-class SerializableCallable(HDF5able):
+class SerializableCallable(object):
 
     def __init__(self, callable, modules):
         self.callable = callable
         self.modules = modules
 
-    def h5_dict_to_serializable_dict(self):
+    def __getstate__(self):
         serialized_c = serialize_callable_and_test(self.callable, self.modules)
         return serialized_c._asdict()
 
-    @classmethod
-    def h5_rebuild_from_dict(cls, d):
-        # just return directly the function
-        return deserialize_callable(**d)
+    def __setstate__(self, state):
+        self.callable = deserialize_callable(**state)
+        self.modules = state['modules']
 
 
 attr_key_type = u'type'
 attr_key_instance_cls = u'cls'
 attr_key_number_value = u'number_value'
 attr_key_bool_value = u'bool_value'
-attr_key_hdf5able_version = u'hdf5able_version'
 
 
 top_level_key = 'hdf5able'
@@ -234,7 +270,7 @@ types = [T(list, "list", load_list, save_list),
          T(strTypes, "unicode", load_str, save_str),
          T(bool, "bool", load_bool, save_bool),
          T(PosixPath, "pathlib.PosixPath", load_path, save_path),
-         T((int, float, complex), "Number", load_number, save_number)]
+         T((int, float, long, complex), "Number", load_number, save_number)]
 
 type_to_exporter = dict()
 str_to_importer = dict()
@@ -253,7 +289,7 @@ for t in types:
     str_to_importer[t.str] = t.importer
     type_to_str[t.type] = t.str
 
-str_to_importer['instance'] = load_hdf5able
+str_to_importer['instance'] = load_instance
 
 
 def link_path_if_softlink(node, name):

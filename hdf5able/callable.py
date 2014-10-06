@@ -41,8 +41,8 @@ def test_callable(c):
         orig_import(name)
         return MagicMock()
 
-    from .base import isPython2
-    if isPython2:
+    from .base import isPy2
+    if isPy2:
         import_string = '__builtin__.__import__'
     else:
         import_string = 'builtins.__import__'

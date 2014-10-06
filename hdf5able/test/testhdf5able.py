@@ -1,13 +1,12 @@
 from __future__ import unicode_literals
 import tempfile
-from nose.tools import raises
-from hdf5able import save, load, HDF5able
+from hdf5able import save, load
 
 
 path = tempfile.mkstemp()[1]
 
 
-class Foo(HDF5able):
+class Foo(object):
 
     def __init__(self):
         self.a = 1
@@ -30,34 +29,23 @@ class Foo(HDF5able):
 
 class FooCustom(Foo):
 
-    def h5_dict_to_serializable_dict(self):
-        d = self.__dict__.copy()
-        d['f'] = list(d['f'])
-        d['e_another_name'] = not d.pop('e')
-        return d
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['f'] = list(state['f'])
+        state['e_another_name'] = not state.pop('e')
+        return state
 
-    @classmethod
-    def h5_dict_from_serialized_dict(cls, d, version):
-        d['f'] = tuple(d['f'])
-        d['e'] = not d.pop('e_another_name')
-        return d
-
-
-class FooNonHDF5able(object):
-
-    def __init__(self):
-        self.a = None
+    def __setstate__(self, state):
+        state['f'] = tuple(state['f'])
+        state['e'] = not state.pop('e_another_name')
+        self.__dict__.update(state)
 
 
-def test_save_hdf5able():
+def test_save_instance():
     save(path, Foo())
 
-@raises(ValueError)
-def test_save_object_raises():
-    save(path, FooNonHDF5able())
 
-
-def test_load_hdf5able():
+def test_load_instance():
     x = Foo()
     save(path, x)
     y = load(path)
@@ -65,7 +53,7 @@ def test_load_hdf5able():
     assert type(y) == Foo
 
 
-def test_load_custom_hdf5able():
+def test_load_custom_instance():
     x = FooCustom()
     save(path, x)
     y = load(path)

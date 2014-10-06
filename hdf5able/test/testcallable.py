@@ -75,5 +75,5 @@ def test_load_serializable_callable():
 
     sc = SerializableCallable(a_function, [])
     save(path, sc)
-    f = load(path)
+    f = load(path).callable
     assert a_function(2, 4) == f(2, 4)

@@ -5,9 +5,9 @@ import numpy as np
 from pathlib import Path
 
 from hdf5able import save, load
-from hdf5able.base import isPython2, u
+from hdf5able.base import isPy2, u
 
-if isPython2:
+if isPy2:
     unicode_type = unicode
 else:
     unicode_type = str
