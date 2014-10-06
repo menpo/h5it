@@ -2,10 +2,11 @@ from __future__ import unicode_literals
 import tempfile
 
 import numpy as np
-from pathlib import Path
+from pathlib import (Path, PosixPath, PurePosixPath,
+                     WindowsPath, PureWindowsPath)
 
 from hdf5able import save, load
-from hdf5able.base import is_py2, as_unicode
+from hdf5able.base import is_py2, as_unicode, host_is_posix, host_is_windows
 
 if is_py2:
     unicode_type = unicode
@@ -161,15 +162,36 @@ def test_load_ndarray():
     assert type(y) == np.ndarray
 
 
-# For now we close this to add Windows support. Need to decide what the correct
-# behavior is here
-# https://github.com/menpo/hdf5able/issues/2
-# def test_load_posix_path():
-#     x = Path('/some/path/here')
-#     save(path, x)
-#     y = load(path)
-#     assert y == x
-#     assert type(y) == PosixPath
+if host_is_posix:
+    def test_load_posix_path_on_posix():
+        x = PosixPath('/some/path/here')
+        save(path, x)
+        y = load(path)
+        assert y == x
+        assert type(y) == PosixPath
+
+    def test_load_windows_path_on_posix():
+        x = PureWindowsPath('C:\some\path\here')
+        save(path, x)
+        y = load(path)
+        assert y == x
+        assert type(y) == PureWindowsPath
+
+
+if host_is_windows:
+    def test_load_posix_path_on_windows():
+        x = PosixPath('/some/path/here')
+        save(path, x)
+        y = load(path)
+        assert y == x
+        assert type(y) == PurePosixPath
+
+    def test_load_windows_path_on_windows():
+        x = WindowsPath('C:\some\path\here')
+        save(path, x)
+        y = load(path)
+        assert y == x
+        assert type(y) == WindowsPath
 
 
 def test_load_empty_list():
