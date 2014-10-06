@@ -235,7 +235,7 @@ types = [T(list, "list", load_list, save_list),
          T(strTypes, "unicode", load_str, save_str),
          T(bool, "bool", load_bool, save_bool),
          T(PosixPath, "pathlib.PosixPath", load_path, save_path),
-         T((int, float, long, complex), "Number", load_number, save_number)]
+         T(numberTypes, "Number", load_number, save_number)]
 
 type_to_exporter = dict()
 str_to_importer = dict()
