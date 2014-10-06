@@ -140,3 +140,18 @@ def safe_exec(source, namespace, name):
 #     kwarg_str = ['{}={}'.format(*i) for i in p.keywords.items()]
 #     args = ', '.join([p.func.__name__] + arg_str + kwarg_str)
 #     return "partial({})".format(args)
+
+
+class SerializableCallable(object):
+
+    def __init__(self, callable, modules):
+        self.callable = callable
+        self.modules = modules
+
+    def __getstate__(self):
+        serialized_c = serialize_callable_and_test(self.callable, self.modules)
+        return serialized_c._asdict()
+
+    def __setstate__(self, state):
+        self.callable = deserialize_callable(**state)
+        self.modules = state['modules']

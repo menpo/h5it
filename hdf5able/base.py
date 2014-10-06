@@ -6,8 +6,6 @@ from pathlib import Path, PosixPath
 import numpy as np
 import h5py
 
-from .callable import serialize_callable_and_test, deserialize_callable
-
 
 isPy2 = sys.version_info.major == 2
 isPy3 = not isPy2
@@ -214,42 +212,6 @@ def import_symbol(name):
     module_name = '.'.join(name.split('.')[:-1])
     m = importlib.import_module(module_name)
     return m.__getattribute__(symbol_name)
-
-
-class HDF5able(object):
-
-    @classmethod
-    def h5_rebuild_from_dict(cls, d):
-        # by default, __new__ cls -> set dict.
-        instance = cls.__new__(cls)
-        instance.__dict__ = d
-        return instance
-
-    @classmethod
-    def h5_dict_from_serialized_dict(cls, d, version):
-        return d
-
-    def h5_dict_to_serializable_dict(self):
-        return self.__dict__
-
-    @property
-    def h5_version(self):
-        return 1
-
-
-class SerializableCallable(object):
-
-    def __init__(self, callable, modules):
-        self.callable = callable
-        self.modules = modules
-
-    def __getstate__(self):
-        serialized_c = serialize_callable_and_test(self.callable, self.modules)
-        return serialized_c._asdict()
-
-    def __setstate__(self, state):
-        self.callable = deserialize_callable(**state)
-        self.modules = state['modules']
 
 
 attr_key_type = u'type'
