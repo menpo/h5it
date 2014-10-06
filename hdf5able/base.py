@@ -122,32 +122,32 @@ def load_path(parent, name, _):
 zero_padded = lambda x: "{:0" + u(len(u(x))) + "}"
 
 
-def save_list(parent, l, name, memo):
+def save_list(l, parent, name, memo):
     list_node = parent.create_group(name)
     padded = zero_padded(len(l))
     for i, x in enumerate(l):
-        h5_export(list_node, x, padded.format(i), memo)
+        h5_export(x, list_node, padded.format(i), memo)
 
 
-def save_unicode_dict(parent, d, name, memo):
+def save_unicode_dict(d, parent, name, memo):
     dict_node = parent.create_group(name)
     if sum(not isinstance(k, strTypes) for k in d.keys()) != 0:
         raise ValueError("Only dictionaries with string keys can be "
                          "serialized")
     for k, v in d.items():
-        h5_export(dict_node, v, str(k), memo)
+        h5_export(v, dict_node, str(k), memo)
 
 
-def save_dict(parent, d, name, memo):
+def save_dict(d, parent, name, memo):
     dict_node = parent.create_group(name)
     for k, v in d.items():
-        h5_export(dict_node, (k, v), str(hash(k)), memo)
+        h5_export((k, v), dict_node, str(hash(k)), memo)
 
 
-def save_set(parent, s, name, memo):
+def save_set(s, parent, name, memo):
     set_node = parent.create_group(name)
     for x in s:
-        h5_export(set_node, x, str(hash(x)), memo)
+        h5_export(x, set_node, str(hash(x)), memo)
 
 
 def get_instance_state(x):
@@ -166,42 +166,42 @@ def instance_is_hdf5able(x):
                 x.__class__.__reduce_ex__ != object.__reduce_ex__)
 
 
-def save_instance(parent, instance, name, memo):
+def save_instance(instance, parent, name, memo):
     if not instance_is_hdf5able(instance):
         raise ValueError('instance {} cannot be saved as it '
                          'implements unsupported parts of the pickle protocol')
     d = get_instance_state(instance)
-    save_unicode_dict(parent, d, name, memo)
+    save_unicode_dict(d, parent, name, memo)
     # unicode dict added itself to the parent. Grab the node
     node = parent[name]
     # And set the attribute so it can be decoded.
     node.attrs[attr_key_instance_cls] = str_of_cls(instance.__class__)
 
 
-def save_ndarray(parent, a, name, _):
+def save_ndarray(a, parent, name, _):
     # fletcher32 is a checksum, gzip compression is supported by Matlab
     parent.create_dataset(name, data=a, compression='gzip', fletcher32=True)
 
 
-def save_none(parent, none, name, _):
+def save_none(none, parent, name, _):
     parent.create_group(name)  # A blank group
 
 
-def save_str(parent, s, name, _):
+def save_str(s, parent, name, _):
     parent.create_dataset(name, data=s)
 
 
-def save_bool(parent, a_bool, name, _):
+def save_bool(a_bool, parent, name, _):
     group = parent.create_group(name)  # A blank group
     group.attrs[attr_key_bool_value] = a_bool
 
 
-def save_number(parent, a_number, name, _):
+def save_number(a_number, parent, name, _):
     group = parent.create_group(name)  # A blank group
     group.attrs[attr_key_number_value] = a_number
 
 
-def save_path(parent, path, name, _):
+def save_path(path, parent, name, _):
     parent.create_dataset(name, data=u(path))
 
 
@@ -325,7 +325,7 @@ def h5_import(parent, name, memo):
         raise ValueError("Cannot find Type attribute on {}".format(node))
 
 
-def h5_export(parent, x, name, memo):
+def h5_export(x, parent, name, memo):
     if id(x) in memo:
         # this object is already exported, just softlink to it.
         parent[name] = h5py.SoftLink(memo[id(x)].name)
@@ -346,7 +346,7 @@ def h5_export(parent, x, name, memo):
     else:
         type_str = type_to_str.get(type_x)
     # definitely have type_str and exporter
-    exporter(parent, x, name, memo)
+    exporter(x, parent, name, memo)
     new_node = parent[name]
     new_node.attrs[attr_key_type] = type_str
     # remember we have exported this object
@@ -365,9 +365,10 @@ def h5_export(parent, x, name, memo):
 
 def save(path, x):
     with h5py.File(path, "w") as f:
-        h5_export(f, x, top_level_key, {})
+        h5_export(x, f, top_level_key, {})
 
 
 def load(path):
     with h5py.File(path, "r") as f:
         return h5_import(f, top_level_key, {})
+    
