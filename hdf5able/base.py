@@ -159,7 +159,8 @@ def get_instance_state(x):
 
 
 def instance_is_hdf5able(x):
-    return not (hasattr(x, '__getnewargs__') or
+    return not ((hasattr(x, '__slots__') and not hasattr(x, '__getstate__')) or
+                hasattr(x, '__getnewargs__') or
                 hasattr(x, '__getnewargs_ex__') or
                 hasattr(x, '__getinitargs__') or
                 x.__class__.__reduce__ != object.__reduce__ or
@@ -371,4 +372,3 @@ def save(path, x):
 def load(path):
     with h5py.File(path, "r") as f:
         return h5_import(f, top_level_key, {})
-    
