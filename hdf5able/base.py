@@ -12,8 +12,10 @@ isPy3 = not isPy2
 
 if isPy2:
     strTypes = (str, unicode)
+    numberTypes = (int, long, float, complex)
 else:
     strTypes = (str, bytes)
+    numberTypes = (int, float, complex)
 
 
 def u(s):
