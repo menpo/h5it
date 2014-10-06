@@ -5,9 +5,9 @@ import numpy as np
 from pathlib import Path
 
 from hdf5able import save, load
-from hdf5able.base import isPy2, u
+from hdf5able.base import is_py2, as_unicode
 
-if isPy2:
+if is_py2:
     unicode_type = unicode
 else:
     unicode_type = str
@@ -132,7 +132,7 @@ def test_load_byte_str():
     x = b"some byte str"
     save(path, x)
     y = load(path)
-    assert y == u(x)
+    assert y == as_unicode(x)
     assert type(y) == unicode_type
 
 

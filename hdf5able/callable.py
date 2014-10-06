@@ -41,8 +41,8 @@ def test_callable(c):
         orig_import(name)
         return MagicMock()
 
-    from .base import isPy2
-    if isPy2:
+    from .base import is_py2
+    if is_py2:
         import_string = '__builtin__.__import__'
     else:
         import_string = 'builtins.__import__'
@@ -150,7 +150,7 @@ class SerializableCallable(object):
 
     def __getstate__(self):
         serialized_c = serialize_callable_and_test(self.callable, self.modules)
-        return serialized_c._asdict()
+        return dict(serialized_c._asdict())
 
     def __setstate__(self, state):
         self.callable = deserialize_callable(**state)

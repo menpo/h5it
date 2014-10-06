@@ -1,28 +1,38 @@
+from __future__ import unicode_literals
+
 import sys
+import os
 import importlib
 from collections import namedtuple
-from pathlib import Path, PosixPath
-
+from pathlib import PosixPath, WindowsPath, PurePosixPath, PureWindowsPath
 import numpy as np
 import h5py
 
+is_py2 = sys.version_info.major == 2
+is_py3 = sys.version_info.major == 3
 
-isPy2 = sys.version_info.major == 2
-isPy3 = not isPy2
-
-if isPy2:
+if is_py2:
     strTypes = (str, unicode)
     numberTypes = (int, long, float, complex)
-else:
+    as_unicode = unicode
+elif is_py3:
     strTypes = (str, bytes)
     numberTypes = (int, float, complex)
+    as_unicode = str
+else:
+    raise Exception('hdf5able is only compatible with Python 2 or Python 3')
 
+host_is_posix = os.name == 'posix'
+host_is_windows = os.name == 'nt'
 
-def u(s):
-    if isPy2:
-        return unicode(s)
-    else:
-        return str(s)
+attr_key_type = 'type'
+attr_key_instance_cls = 'cls'
+attr_key_instance_has_custom_getstate = 'instance_has_custom_getstate'
+attr_key_number_value = 'number_value'
+attr_key_bool_value = 'bool_value'
+
+top_level_group_namespace = 'hdf5able'
+
 
 # ------------------------------ IMPORTS ------------------------------ #
 
@@ -65,28 +75,33 @@ def load_set(parent, name, memo):
 
 
 def load_instance(parent, name, memo):
+    node = parent[name]
     # import the class and new it up
-    cls = import_symbol(parent[name].attrs[attr_key_instance_cls])
+    cls = import_symbol(node.attrs[attr_key_instance_cls])
     inst = cls.__new__(cls)
-
-    state = load_unicode_dict(parent, name, memo)
-    setstate = getattr(inst, "__setstate__", None)
+    if attr_key_instance_has_custom_getstate in parent[name].attrs:
+        # this instance implements __getstate__, import whatever it is
+        state = h5_import(node, '__getstate__', memo)
+    else:
+        # grab the state - certainly a unicode-keyed dict
+        state = load_unicode_dict(parent, name, memo)
+    if not state:
+        # state was False so we return instance
+        # https://docs.python.org/3/library/pickle.html#object.__setstate__
+        return inst
+    setstate = getattr(inst, '__setstate__', None)
     if setstate is not None:
+        # user wants to handle state setting
         setstate(state)
         return inst
-    # we should support slots
-    # slotstate = None
-    # if isinstance(state, tuple) and len(state) == 2:
-    #     state, slotstate = state
-    if state:
-        inst_dict = inst.__dict__
-        if isPy3:
-            intern = sys.intern
-        for k, v in state.items():
-            if isPy3:
-                k = intern(k)
-            inst_dict[k] = v
-    # Again, for future __slot__ support
+    inst_dict = inst.__dict__
+    if is_py3:
+        intern = sys.intern
+    for k, v in state.items():
+        if is_py3:
+            k = intern(k)
+        inst_dict[k] = v
+    # For future __slot__ support
     # if slotstate:
     #     for k, v in slotstate.items():
     #         setattr(inst, k, v)
@@ -102,7 +117,7 @@ def load_none(parent, name, _):
 
 
 def load_str(parent, name, _):
-    return u(np.array(parent[name]))
+    return as_unicode(np.array(parent[name]))
 
 
 def load_bool(parent, name, _):
@@ -113,13 +128,25 @@ def load_number(parent, name, _):
     return np.asscalar(parent[name].attrs[attr_key_number_value])
 
 
-def load_path(parent, name, _):
-    return Path(load_str(parent, name, _))
+def load_posix_path(parent, name, _):
+    str_path = load_str(parent, name, _)
+    if host_is_posix:
+        return PosixPath(str_path)
+    else:
+        return PurePosixPath(str_path)
+
+
+def load_windows_path(parent, name, _):
+    str_path = load_str(parent, name, _)
+    if host_is_windows:
+        return WindowsPath(str_path)
+    else:
+        return PureWindowsPath(str_path)
 
 
 # ------------------------------ EXPORTS ------------------------------ #
 
-zero_padded = lambda x: "{:0" + u(len(u(x))) + "}"
+zero_padded = lambda x: "{:0" + as_unicode(len(as_unicode(x))) + "}"
 
 
 def save_list(l, parent, name, memo):
@@ -129,9 +156,13 @@ def save_list(l, parent, name, memo):
         h5_export(x, list_node, padded.format(i), memo)
 
 
+is_string_keyed_dict = lambda d: (sum(not isinstance(k, strTypes)
+                                      for k in d.keys()) == 0)
+
+
 def save_unicode_dict(d, parent, name, memo):
     dict_node = parent.create_group(name)
-    if sum(not isinstance(k, strTypes) for k in d.keys()) != 0:
+    if not is_string_keyed_dict(d):
         raise ValueError("Only dictionaries with string keys can be "
                          "serialized")
     for k, v in d.items():
@@ -150,12 +181,14 @@ def save_set(s, parent, name, memo):
         h5_export(x, set_node, str(hash(x)), memo)
 
 
+InstanceState = namedtuple('InstanceState', ['state', 'from__getstate__'])
+
+
 def get_instance_state(x):
     try:
-        state = x.__getstate__()
+        return InstanceState(x.__getstate__(), True)
     except AttributeError:
-        state = x.__dict__
-    return state
+        return InstanceState(x.__dict__, False)
 
 
 def instance_is_hdf5able(x):
@@ -170,13 +203,27 @@ def instance_is_hdf5able(x):
 def save_instance(instance, parent, name, memo):
     if not instance_is_hdf5able(instance):
         raise ValueError('instance {} cannot be saved as it '
-                         'implements unsupported parts of the pickle protocol')
-    d = get_instance_state(instance)
-    save_unicode_dict(d, parent, name, memo)
-    # unicode dict added itself to the parent. Grab the node
-    node = parent[name]
-    # And set the attribute so it can be decoded.
-    node.attrs[attr_key_instance_cls] = str_of_cls(instance.__class__)
+                         'implements unsupported parts of the '
+                         'pickle protocol'.format(instance))
+    # In general, instance state can be anything if the user has implemented
+    # __getstate__ so we need to be a little careful. In 99.9% of cases
+    # it will be a dict with string keys, so we optimise for that.
+    state, from_getstate = get_instance_state(instance)
+    is_str_dict = not from_getstate
+    if from_getstate:
+        # user provided a custom method - let's see if it's a string keyed dict
+        is_str_dict = type(state) == dict and is_string_keyed_dict(state)
+    if is_str_dict:
+        # common case - namespace can immediately go here.
+        save_unicode_dict(state, parent, name, memo)
+    else:
+        # it's something else. Let's make a subgroup called state and save out
+        # whatever the user gave us
+        h5_export(state, parent.create_group(name), '__getstate__', memo)
+        parent[name].attrs[attr_key_instance_has_custom_getstate] = True
+    # state added itself to the parent. Grab the node and set the attribute
+    # so it can be decoded in the future
+    parent[name].attrs[attr_key_instance_cls] = str_of_cls(instance.__class__)
 
 
 def save_ndarray(a, parent, name, _):
@@ -203,7 +250,7 @@ def save_number(a_number, parent, name, _):
 
 
 def save_path(path, parent, name, _):
-    parent.create_dataset(name, data=u(path))
+    parent.create_dataset(name, data=as_unicode(path))
 
 
 str_of_cls = lambda x: "{}.{}".format(x.__module__, x.__name__)
@@ -216,13 +263,6 @@ def import_symbol(name):
     return m.__getattribute__(symbol_name)
 
 
-attr_key_type = u'type'
-attr_key_instance_cls = u'cls'
-attr_key_number_value = u'number_value'
-attr_key_bool_value = u'bool_value'
-
-
-top_level_key = 'hdf5able'
 T = namedtuple('T', ["type", "str", "importer", "exporter"])
 
 
@@ -234,7 +274,8 @@ types = [T(list, "list", load_list, save_list),
          T(type(None), "NoneType", load_none, save_none),
          T(strTypes, "unicode", load_str, save_str),
          T(bool, "bool", load_bool, save_bool),
-         T(PosixPath, "pathlib.PosixPath", load_path, save_path),
+         T((PosixPath, PurePosixPath), "pathlib.PosixPath", load_posix_path, save_path),
+         T((WindowsPath, PureWindowsPath), "pathlib.WindowsPath", load_windows_path, save_path),
          T(numberTypes, "Number", load_number, save_number)]
 
 type_to_exporter = dict()
@@ -328,9 +369,9 @@ def h5_export(x, parent, name, memo):
 
 def save(path, x):
     with h5py.File(path, "w") as f:
-        h5_export(x, f, top_level_key, {})
+        h5_export(x, f, top_level_group_namespace, {})
 
 
 def load(path):
     with h5py.File(path, "r") as f:
-        return h5_import(f, top_level_key, {})
+        return h5_import(f, top_level_group_namespace, {})
