@@ -4,6 +4,7 @@ import sys
 import os
 import importlib
 from collections import namedtuple
+from pickle import PicklingError
 from pathlib import PosixPath, WindowsPath, PurePosixPath, PureWindowsPath
 import numpy as np
 import h5py
@@ -15,10 +16,12 @@ if is_py2:
     strTypes = (str, unicode)
     numberTypes = (int, long, float, complex)
     as_unicode = unicode
+    from copy_reg import dispatch_table
 elif is_py3:
     strTypes = (str, bytes)
     numberTypes = (int, float, complex)
     as_unicode = str
+    from copyreg import dispatch_table
 else:
     raise Exception('hdf5able is only compatible with Python 2 or Python 3')
 
@@ -200,7 +203,7 @@ def instance_is_hdf5able(x):
                 x.__class__.__reduce_ex__ != object.__reduce_ex__)
 
 
-def save_instance(instance, parent, name, memo):
+def save_insttance(instance, parent, name, memo):
     if not instance_is_hdf5able(instance):
         raise ValueError('instance {} cannot be saved as it '
                          'implements unsupported parts of the '
@@ -224,6 +227,56 @@ def save_instance(instance, parent, name, memo):
     # state added itself to the parent. Grab the node and set the attribute
     # so it can be decoded in the future
     parent[name].attrs[attr_key_instance_cls] = str_of_cls(instance.__class__)
+
+
+def save_global(obj):
+    pass
+
+def save(obj):
+
+    # Check the memo
+    x = self.memo.get(id(obj))
+    if x is not None:
+        self.write(self.get(x[0]))
+        return
+
+    reduce = dispatch_table.get(t)
+    if reduce is not None:
+        rv = reduce(obj)
+    else:
+        # Check for a class with a custom metaclass; treat as regular class
+        try:
+            issc = issubclass(t, type)
+        except TypeError:  # t is not a class (old Boost; see SF #502085)
+            issc = False
+        if issc:
+            save_global(obj)
+            return
+
+        reduce = getattr(obj, "__reduce__", None)
+        if reduce is not None:
+            rv = reduce()
+        else:
+            raise PicklingError("Can't pickle %r object: %r" %
+                                (t.__name__, obj))
+
+    # Check for string returned by reduce(), meaning "save as global"
+    if isinstance(rv, str):
+        save_global(obj, rv)
+        return
+
+    # Assert that reduce() returned a tuple
+    if not isinstance(rv, tuple):
+        raise PicklingError("%s must return string or tuple" % reduce)
+
+    # Assert that it returned an appropriately sized tuple
+    l = len(rv)
+    if not (2 <= l <= 5):
+        raise PicklingError("Tuple returned by %s must have "
+                            "two to five elements" % reduce)
+
+    # Save the reduce() output and finally memoize the object
+    h5_export()
 
 
 def save_ndarray(a, parent, name, _):
