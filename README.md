@@ -1,4 +1,5 @@
-hdf5able
-========
+h5it
+====
 
-Efficient serialisation interface from ndarray-focused objects to HDF5.
+An implimentation of the Pickle protocol 2 to HDF5 files.
+

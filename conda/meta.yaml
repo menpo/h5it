@@ -1,5 +1,5 @@
 package:
-  name: hdf5able
+  name: h5it
   version: {{ environ['CONDACI_VERSION'] }}
 
 requirements:
@@ -19,11 +19,11 @@ test:
   - nose
 
   imports:
-    - hdf5able
+    - h5it
 
   commands:
-    - python -c "import nose; nose.main()" -s hdf5able
+    - python -c "import nose; nose.main()" -s h5it
 
 about:
-  home: https://github.com/menpo/hdf5able/
+  home: https://github.com/menpo/h5it/
   license: BSD License

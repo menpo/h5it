@@ -1,12 +1,12 @@
 import tempfile
 from nose.tools import raises
-from hdf5able import SerializableCallable, save, load
+from h5it import SerializableCallable, save, load
 
 path = tempfile.mkstemp()[1]
 
 
 def test_serialize_callable_and_test_basic():
-    from hdf5able.callable import serialize_callable_and_test as sct
+    from h5it.callable import serialize_callable_and_test as sct
 
     def a_mock_function(x, y):
         pass
@@ -15,7 +15,7 @@ def test_serialize_callable_and_test_basic():
 
 
 def test_get_source():
-    from hdf5able.callable import extract_source
+    from h5it.callable import extract_source
 
     def a_mock_function(x, y):
         pass
@@ -25,7 +25,7 @@ def test_get_source():
 
 
 def test_use_allowed_global():
-    from hdf5able.callable import serialize_callable_and_test
+    from h5it.callable import serialize_callable_and_test
     from itertools import product
     import itertools
 
@@ -37,7 +37,7 @@ def test_use_allowed_global():
 
 @raises(NameError)
 def test_use_unallowed_global_raises_never_present():
-    from hdf5able.callable import serialize_callable_and_test
+    from h5it.callable import serialize_callable_and_test
 
     def a_mock_function(*args):
         return product(args)
@@ -47,7 +47,7 @@ def test_use_unallowed_global_raises_never_present():
 
 @raises(NameError)
 def test_use_unallowed_global_raises_was_present():
-    from hdf5able.callable import serialize_callable_and_test
+    from h5it.callable import serialize_callable_and_test
     from itertools import product
 
     def a_mock_function(*args):

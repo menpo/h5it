@@ -2,8 +2,8 @@ from __future__ import unicode_literals
 import tempfile
 from nose.tools import raises
 
-from hdf5able import save, load
-from hdf5able.base import instance_is_hdf5able
+from h5it import save, load
+from h5it.base import instance_is_hdf5able
 
 
 

@@ -5,8 +5,8 @@ import numpy as np
 from pathlib import (Path, PosixPath, PurePosixPath,
                      WindowsPath, PureWindowsPath)
 
-from hdf5able import save, load
-from hdf5able.base import is_py2, as_unicode, host_is_posix, host_is_windows
+from h5it import save, load
+from h5it.base import is_py2, as_unicode, host_is_posix, host_is_windows
 
 if is_py2:
     unicode_type = unicode

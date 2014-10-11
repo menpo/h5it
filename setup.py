@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import sys
 import versioneer
 
-project_name = 'hdf5able'
+project_name = 'h5it'
 
 # Versioneer allows us to automatically generate versioning from
 # our git tagging system which makes releases simpler.
@@ -23,7 +23,7 @@ if sys.version_info.major == 2:
 setup(name=project_name,
       version=versioneer.get_version(),
       cmdclass=versioneer.get_cmdclass(),
-      description='Efficient serialisation interface from ndarray-focused objects to HDF5',
+      description='Pickle anything to HDF5',
       author='James Booth',
       author_email='james.booth08@imperial.ac.uk',
       packages=find_packages(),

@@ -20,7 +20,7 @@ elif is_py3:
     numberTypes = (int, float, complex)
     as_unicode = str
 else:
-    raise Exception('hdf5able is only compatible with Python 2 or Python 3')
+    raise Exception('h5it is only compatible with Python 2 or Python 3')
 
 host_is_posix = os.name == 'posix'
 host_is_windows = os.name == 'nt'
@@ -31,7 +31,7 @@ attr_key_instance_has_custom_getstate = 'instance_has_custom_getstate'
 attr_key_number_value = 'number_value'
 attr_key_bool_value = 'bool_value'
 
-top_level_group_namespace = 'hdf5able'
+top_level_group_namespace = 'h5it'
 
 
 # ------------------------------ IMPORTS ------------------------------ #
