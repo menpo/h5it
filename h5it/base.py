@@ -8,6 +8,17 @@ from pathlib import PosixPath, WindowsPath, PurePosixPath, PureWindowsPath
 import numpy as np
 import h5py
 
+from pickle import PicklingError, UnpicklingError
+
+
+class H5itPicklingError(PicklingError):
+    pass
+
+
+class H5itUnpicklingError(UnpicklingError):
+    pass
+
+
 is_py2 = sys.version_info.major == 2
 is_py3 = sys.version_info.major == 3
 
@@ -48,7 +59,8 @@ def load_list(parent, name, memo):
     counts = [x.i for x in ordered]
     items = [x.item for x in ordered]
     if counts != list(range(len(counts))):
-        raise ValueError("Attempted to import a list that is missing elements")
+        raise H5itUnpicklingError("Attempted to import a list "
+                                  "that is missing elements")
     return items
 
 
@@ -325,10 +337,12 @@ def h5_import(parent, name, memo):
             memo[memo_path] = obj
             return obj
         else:
-            raise ValueError("Don't know how to import type {}"
-                             " for node {}".format(Type, node))
+            raise H5itUnpicklingError(
+                "Don't know how to import type "
+                "{} for node {}".format(Type, node))
     else:
-        raise ValueError("Cannot find Type attribute on {}".format(node))
+        raise H5itUnpicklingError("Cannot find Type "
+                                  "attribute on {}".format(node))
 
 
 def h5_export(x, parent, name, memo):
@@ -345,8 +359,9 @@ def h5_export(x, parent, name, memo):
             exporter = save_instance
             type_str = 'instance'
         else:
-            raise ValueError("Cannot export {} named "
-                             "'{}' of type {}".format(x, name, type(x)))
+            raise H5itPicklingError("Cannot export {} "
+                                    "named '{}' of type "
+                                    "{}".format(x, name, type_x))
     else:
         type_str = type_to_str.get(type_x)
     # definitely have type_str and exporter
