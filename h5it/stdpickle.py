@@ -380,14 +380,11 @@ def save_reduce_py2(func, args, state=None, listitems=None, dictitems=None,
 
 
 def find_class_py3(module, name, proto=2, fix_imports=True):
-    print(type(module))
     if proto < 3 and fix_imports:
-        print('here we go')
         if (module, name) in _compat_pickle.NAME_MAPPING:
             module, name = _compat_pickle.NAME_MAPPING[(module, name)]
         if module in _compat_pickle.IMPORT_MAPPING:
             module = _compat_pickle.IMPORT_MAPPING[module]
-    print(type(module))
     __import__(module, level=0)
     return _getattribute(sys.modules[module], name,
                          allow_qualname=proto >= 4)

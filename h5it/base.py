@@ -113,8 +113,6 @@ def load_reducible(parent, name, memo):
         # reduction using the REDUCE protocol
         func_module = node.attrs[attr_key_reduction_func_module]
         func_name = node.attrs[attr_key_reduction_func_name]
-        print(type(func_module))
-        print(type(func_name))
         func = pickle_load_global(func_module, func_name)
         obj = func(*args)
     else:
@@ -231,7 +229,6 @@ def save_reducible(x, parent, name, memo):
         node.attrs[attr_key_reduction_cls_name] = cls_name
     elif 'func' in reduction:
         func_module, func_name = reduction['func']
-        print('saving {}, {}'.format(type(func_module), type(func_name)))
         node.attrs[attr_key_reduction_func_module] = func_module
         node.attrs[attr_key_reduction_func_name] = func_name
     else:
