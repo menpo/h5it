@@ -5,14 +5,19 @@
 
 from .base import is_py2, is_py3, H5itPicklingError
 import sys
+from collections import namedtuple
 
-from pickle import whichmodule, PicklingError, dispatch_table
+
+GlobalTuple = namedtuple('Global', ('module', 'name'))
+
+from pickle import (whichmodule, PicklingError, dispatch_table,
+                    _extension_registry)
 
 if is_py2:
     from types import TypeType, StringType, TupleType
 
 if is_py3:
-    from pickle import _getattribute, _extension_registry, _compat_pickle
+    from pickle import _getattribute, _compat_pickle
 
 
 # adapted from Python 3 save_global
@@ -72,7 +77,8 @@ def save_global_py3(obj, name=None, proto=2, fix_imports=True):
             if module_name in r_import_mapping:
                 module_name = r_import_mapping[module_name]
         try:
-            return bytes(module_name, "ascii"), bytes(name, "ascii")
+            return GlobalTuple(bytes(module_name, "ascii"),
+                               bytes(name, "ascii"))
         except UnicodeEncodeError:
             raise PicklingError(
                 "can't pickle global identifier '%s.%s' using "
@@ -114,88 +120,15 @@ def save_global_py2(obj, name=None, proto=2):
             # else:
             #     write(EXT4 + pack("<i", code))
             # return
-            raise H5itPicklingError("h5it Can't pickle %r: extension codes are not"
-                            " supported yet." % obj)
-
-    return module, name
-
-
-if is_py2:
-    save_global = save_global_py2
-elif is_py3:
-    save_global = save_global_py3
-else:
-    raise PicklingError('Can only save global for Python 2/3')
+            raise H5itPicklingError(
+                "h5it Can't pickle %r: extension codes "
+                "are not supported yet." % obj)
+    return GlobalTuple(module, name)
 
 
-def save_py2(obj, memo, proto=2):
-
-    # Check the memo
-    x = memo.get(id(obj))
-    if x:
-        return x
-
-    # Check the type dispatch table
+def save_py3(obj, proto=2):
     t = type(obj)
-    f = self.dispatch.get(t)
-    if f:
-        f(self, obj) # Call unbound method with explicit self
-        return
 
-    # Check copy_reg.dispatch_table
-    reduce = dispatch_table.get(t)
-    if reduce:
-        rv = reduce(obj)
-    else:
-        # Check for a class with a custom metaclass; treat as regular class
-        try:
-            issc = issubclass(t, TypeType)
-        except TypeError: # t is not a class (old Boost; see SF #502085)
-            issc = 0
-        if issc:
-            return save_global_py2(obj, memo, proto=proto)
-
-        # Check for a __reduce_ex__ method, fall back to __reduce__
-        reduce = getattr(obj, "__reduce_ex__", None)
-        if reduce:
-            rv = reduce(proto)
-        else:
-            reduce = getattr(obj, "__reduce__", None)
-            if reduce:
-                rv = reduce()
-            else:
-                raise PicklingError("Can't pickle %r object: %r" %
-                                    (t.__name__, obj))
-
-    # Check for string returned by reduce(), meaning "save as global"
-    if type(rv) is StringType:
-        return save_global_py2(obj, rv)
-
-    # Assert that reduce() returned a tuple
-    if type(rv) is not TupleType:
-        raise PicklingError("%s must return string or tuple" % reduce)
-
-    # Assert that it returned an appropriately sized tuple
-    l = len(rv)
-    if not (2 <= l <= 5):
-        raise PicklingError("Tuple returned by %s must have "
-                            "two to five elements" % reduce)
-
-    # Save the reduce() output and finally memoize the object
-    return save_reduce_py2(obj=obj, *rv)
-
-
-def save_py3(obj, memo, proto=2):
-
-    # Check the type dispatch table
-    t = type(obj)
-    f = self.dispatch.get(t)
-    if f is not None:
-        f(self, obj) # Call unbound method with explicit self
-        return
-
-    # Check private dispatch table if any, or else copyreg.dispatch_table
-    #reduce = getattr(self, 'dispatch_table', dispatch_table).get(t)
     # Check copyreg.dispatch_table only.
     reduce = dispatch_table.get(t)
     if reduce is not None:
@@ -207,7 +140,7 @@ def save_py3(obj, memo, proto=2):
         except TypeError: # t is not a class (old Boost; see SF #502085)
             issc = False
         if issc:
-            return save_global(obj)
+            return save_global_py3(obj)
 
         # Check for a __reduce_ex__ method, fall back to __reduce__
         reduce = getattr(obj, "__reduce_ex__", None)
@@ -235,12 +168,59 @@ def save_py3(obj, memo, proto=2):
         raise PicklingError("Tuple returned by %s must have "
                             "two to five elements" % reduce)
 
-    # Save the reduce() output and finally memoize the object
+    # return the reduce() output for serializing
     return save_reduce_py3(obj=obj, *rv)
+
+
+def save_py2(obj, proto=2):
+    t = type(obj)
+
+    # Check copy_reg.dispatch_table
+    reduce = dispatch_table.get(t)
+    if reduce:
+        rv = reduce(obj)
+    else:
+        # Check for a class with a custom metaclass; treat as regular class
+        try:
+            issc = issubclass(t, TypeType)
+        except TypeError: # t is not a class (old Boost; see SF #502085)
+            issc = 0
+        if issc:
+            return save_global_py2(obj, proto=proto)
+
+        # Check for a __reduce_ex__ method, fall back to __reduce__
+        reduce = getattr(obj, "__reduce_ex__", None)
+        if reduce:
+            rv = reduce(proto)
+        else:
+            reduce = getattr(obj, "__reduce__", None)
+            if reduce:
+                rv = reduce()
+            else:
+                raise PicklingError("Can't pickle %r object: %r" %
+                                    (t.__name__, obj))
+
+    # Check for string returned by reduce(), meaning "save as global"
+    if type(rv) is StringType:
+        return save_global_py2(obj, rv)
+
+    # Assert that reduce() returned a tuple
+    if type(rv) is not TupleType:
+        raise PicklingError("%s must return string or tuple" % reduce)
+
+    # Assert that it returned an appropriately sized tuple
+    l = len(rv)
+    if not (2 <= l <= 5):
+        raise PicklingError("Tuple returned by %s must have "
+                            "two to five elements" % reduce)
+
+    # Return the reduce() output for serialization
+    return save_reduce_py2(obj=obj, *rv)
 
 
 def save_reduce_py3(func, args, state=None, listitems=None, dictitems=None,
                     obj=None, proto=2):
+    reduced = {}
 
     if not isinstance(args, tuple):
         raise PicklingError("args from save_reduce() must be a tuple")
@@ -297,22 +277,20 @@ def save_reduce_py3(func, args, state=None, listitems=None, dictitems=None,
             raise PicklingError(
                 "args[0] from __newobj__ args has the wrong class")
         args = args[1:]
-        save(cls)
-        save(args)
-        write(NEWOBJ)
+        reduced['cls'] = save_global_py3(cls)
+        reduced['args'] = args
     else:
-        save(func)
-        save(args)
-        write(REDUCE)
+        reduced['func'] = save_global_py3(func)
+        reduced['args'] = args
 
-    if obj is not None:
-        # If the object is already in the memo, this means it is
-        # recursive. In this case, throw away everything we put on the
-        # stack, and fetch the object back from the memo.
-        if id(obj) in memo:
-            write(POP + self.get(self.memo[id(obj)][0]))
-        else:
-            memoize(obj)
+    # if obj is not None:
+    #     # If the object is already in the memo, this means it is
+    #     # recursive. In this case, throw away everything we put on the
+    #     # stack, and fetch the object back from the memo.
+    #     if id(obj) in memo:
+    #         write(POP + self.get(self.memo[id(obj)][0]))
+    #     else:
+    #         memoize(obj)
 
     # More new special cases (that work with older protocols as
     # well): when __reduce__ returns a tuple with 4 or 5 items,
@@ -320,19 +298,20 @@ def save_reduce_py3(func, args, state=None, listitems=None, dictitems=None,
     # items and dict items (as (key, value) tuples), or None.
 
     if listitems is not None:
-        self._batch_appends(listitems)
+        reduced['listitems'] = listitems
 
     if dictitems is not None:
-        self._batch_setitems(dictitems)
+        reduced['dictitems'] = dictitems
 
     if state is not None:
-        save(state)
-        write(BUILD)
+        reduced['state'] = state
+
+    return reduced
 
 
 def save_reduce_py2(func, args, state=None, listitems=None, dictitems=None,
                     obj=None, proto=2):
-
+    reduced = {}
     # Assert that args is a tuple or None
     if not isinstance(args, TupleType):
         raise PicklingError("args from reduce() should be a tuple")
@@ -377,16 +356,11 @@ def save_reduce_py2(func, args, state=None, listitems=None, dictitems=None,
             raise PicklingError(
                 "args[0] from __newobj__ args has the wrong class")
         args = args[1:]
-        save(cls)
-        save(args)
-        write(NEWOBJ)
+        reduced['cls'] = save_global_py2(cls)
+        reduced['args'] = args
     else:
-        save(func)
-        save(args)
-        write(REDUCE)
-
-    if obj is not None:
-        memoize(obj)
+        reduced['func'] = save_global_py2(func)
+        reduced['args'] = args
 
     # More new special cases (that work with older protocols as
     # well): when __reduce__ returns a tuple with 4 or 5 items,
@@ -394,14 +368,106 @@ def save_reduce_py2(func, args, state=None, listitems=None, dictitems=None,
     # items and dict items (as (key, value) tuples), or None.
 
     if listitems is not None:
-        self._batch_appends(listitems)
+        reduced['listitems'] = listitems
 
     if dictitems is not None:
-        self._batch_setitems(dictitems)
+        reduced['dictitems'] = dictitems
 
     if state is not None:
-        save(state)
-        write(BUILD)
+        reduced['state'] = state
+
+    return reduced
+
+
+def find_class_py3(module, name, proto=2, fix_imports=True):
+    if proto < 3 and fix_imports:
+        if (module, name) in _compat_pickle.NAME_MAPPING:
+            module, name = _compat_pickle.NAME_MAPPING[(module, name)]
+        if module in _compat_pickle.IMPORT_MAPPING:
+            module = _compat_pickle.IMPORT_MAPPING[module]
+    __import__(module, level=0)
+    return _getattribute(sys.modules[module], name,
+                         allow_qualname=proto >= 4)
+
+
+def find_class_py2(module, name):
+    # Subclasses may override this
+    __import__(module)
+    mod = sys.modules[module]
+    klass = getattr(mod, name)
+    return klass
+
+
+def load_build_py2(inst, state):
+    setstate = getattr(inst, "__setstate__", None)
+    if setstate:
+        setstate(state)
+        return
+    slotstate = None
+    if isinstance(state, tuple) and len(state) == 2:
+        state, slotstate = state
+    if state:
+        try:
+            d = inst.__dict__
+            try:
+                for k, v in state.iteritems():
+                    d[intern(k)] = v
+            # keys in state don't have to be strings
+            # don't blow up, but don't go out of our way
+            except TypeError:
+                d.update(state)
+
+        except RuntimeError:
+            # XXX In restricted execution, the instance's __dict__
+            # is not accessible.  Use the old way of unpickling
+            # the instance variables.  This is a semantic
+            # difference when unpickling in restricted
+            # vs. unrestricted modes.
+            # Note, however, that cPickle has never tried to do the
+            # .update() business, and always uses
+            #     PyObject_SetItem(inst.__dict__, key, value) in a
+            # loop over state.items().
+            for k, v in state.items():
+                setattr(inst, k, v)
+    if slotstate:
+        for k, v in slotstate.items():
+            setattr(inst, k, v)
+    return inst
+
+
+def load_build_py3(inst, state):
+    setstate = getattr(inst, "__setstate__", None)
+    if setstate is not None:
+        setstate(state)
+        return
+    slotstate = None
+    if isinstance(state, tuple) and len(state) == 2:
+        state, slotstate = state
+    if state:
+        inst_dict = inst.__dict__
+        intern = sys.intern
+        for k, v in state.items():
+            if type(k) is str:
+                inst_dict[intern(k)] = v
+            else:
+                inst_dict[k] = v
+    if slotstate:
+        for k, v in slotstate.items():
+            setattr(inst, k, v)
+
+    return inst
+
+
+if is_py2:
+    pickle_save_global = save_global_py2
+    pickle_save = save_py2
+    find_class = find_class_py2
+    load_build = load_build_py2
+elif is_py3:
+    pickle_save_global = save_global_py3
+    pickle_save = save_py3
+    find_class = find_class_py3
+    load_build = load_build_py3
 
 ############################### DISPATCH TABLES ###############################
 #

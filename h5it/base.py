@@ -2,7 +2,6 @@ from __future__ import unicode_literals
 
 import sys
 import os
-import importlib
 from collections import namedtuple
 from pathlib import PosixPath, WindowsPath, PurePosixPath, PureWindowsPath
 import numpy as np
@@ -23,12 +22,16 @@ is_py2 = sys.version_info.major == 2
 is_py3 = sys.version_info.major == 3
 
 if is_py2:
+    from types import ClassType, FunctionType, BuiltinFunctionType, TypeType
     strTypes = (str, unicode)
     numberTypes = (int, long, float, complex)
+    globalTypes = (ClassType, FunctionType, BuiltinFunctionType, TypeType)
     as_unicode = unicode
 elif is_py3:
+    from types import FunctionType
     strTypes = (str, bytes)
     numberTypes = (int, float, complex)
+    globalTypes = FunctionType
     as_unicode = str
 else:
     raise Exception('h5it is only compatible with Python 2 or Python 3')
@@ -37,7 +40,16 @@ host_is_posix = os.name == 'posix'
 host_is_windows = os.name == 'nt'
 
 attr_key_type = 'type'
-attr_key_instance_cls = 'cls'
+attr_key_type_reduction = 'reduction'
+
+attr_key_reduction_cls_module = 'cls_module'
+attr_key_reduction_cls_name = 'cls_name'
+attr_key_reduction_func_module = 'func_module'
+attr_key_reduction_func_name = 'func_name'
+
+attr_key_global_module = 'module'
+attr_key_global_name = 'name'
+
 attr_key_instance_has_custom_getstate = 'instance_has_custom_getstate'
 attr_key_number_value = 'number_value'
 attr_key_bool_value = 'bool_value'
@@ -86,38 +98,55 @@ def load_set(parent, name, memo):
     return set(h5_import(node, k, memo) for k in node.keys())
 
 
-def load_instance(parent, name, memo):
+def load_reducible(parent, name, memo):
+    from .stdpickle import find_class, load_build
     node = parent[name]
     # import the class and new it up
-    cls = import_symbol(node.attrs[attr_key_instance_cls])
-    inst = cls.__new__(cls)
-    if attr_key_instance_has_custom_getstate in parent[name].attrs:
-        # this instance implements __getstate__, import whatever it is
-        state = h5_import(node, '__getstate__', memo)
+    if attr_key_global_name in node.attrs:
+        # reduction actually saved out a global
+        return load_global(parent, name, memo)
+
+    # if not, we are loading with NEWOBJ or REDUCE
+    args = load_tuple(node, 'args', memo)
+    if attr_key_reduction_cls_module in node.attrs:
+        # reduction using the NEWOBJ protocol
+        cls_module = node.attrs[attr_key_reduction_cls_module]
+        cls_name = node.attrs[attr_key_reduction_cls_name]
+        cls = find_class(cls_module, cls_name)
+        obj = cls.__new__(cls, *args)
+    elif attr_key_reduction_func_module in node.attrs:
+        # reduction using the REDUCE protocol
+        func_module = node.attrs[attr_key_reduction_func_module]
+        func_name = node.attrs[attr_key_reduction_func_name]
+        func = find_class(func_module, func_name)
+        obj = func(*args)
     else:
-        # grab the state - certainly a unicode-keyed dict
-        state = load_unicode_dict(parent, name, memo)
-    if not state:
-        # state was False so we return instance
-        # https://docs.python.org/3/library/pickle.html#object.__setstate__
-        return inst
-    setstate = getattr(inst, '__setstate__', None)
-    if setstate is not None:
-        # user wants to handle state setting
-        setstate(state)
-        return inst
-    inst_dict = inst.__dict__
-    if is_py3:
-        intern = sys.intern
-    for k, v in state.items():
-        if is_py3:
-            k = intern(k)
-        inst_dict[k] = v
-    # For future __slot__ support
-    # if slotstate:
-    #     for k, v in slotstate.items():
-    #         setattr(inst, k, v)
-    return inst
+        raise H5itUnpicklingError(
+            "error loading reduction - can't find {} or {} in attrs".format(
+            attr_key_reduction_cls_module, attr_key_reduction_func_module))
+
+    if 'state' in node:
+        state = h5_import(node, 'state', memo)
+        load_build(obj, state)
+
+    if 'listitems' in node:
+        listitems = h5_import(node, 'listitems', memo)
+        for i in listitems:
+            obj.append(i)
+
+    if 'iteritems' in node:
+        iteritems = h5_import(node, 'iteritems', memo)
+        for k, v in iteritems:
+            obj[k] = v
+
+    return obj
+
+
+def load_global(parent, name, _):
+    from .stdpickle import find_class
+    module = parent[name].attrs[attr_key_global_module]
+    m_name = parent[name].attrs[attr_key_global_name]
+    return find_class(module, m_name)
 
 
 def load_ndarray(parent, name, _):
@@ -193,49 +222,49 @@ def save_set(s, parent, name, memo):
         h5_export(x, set_node, str(hash(x)), memo)
 
 
-InstanceState = namedtuple('InstanceState', ['state', 'from__getstate__'])
+def save_reducible(x, parent, name, memo):
+    from .stdpickle import pickle_save, GlobalTuple
+    # save down the object: we'll either get back a global or a reduction state
+    reduction = pickle_save(x)
+    if type(reduction) == GlobalTuple:
+        save_global(reduction, parent, name, memo)
+        return
 
+    # Reduction is a dict that is ready to directly be saved. Let's make a
+    # group
+    node = parent.create_group(name)
 
-def get_instance_state(x):
-    try:
-        return InstanceState(x.__getstate__(), True)
-    except AttributeError:
-        return InstanceState(x.__dict__, False)
-
-
-def instance_is_hdf5able(x):
-    return not ((hasattr(x, '__slots__') and not hasattr(x, '__getstate__')) or
-                hasattr(x, '__getnewargs__') or
-                hasattr(x, '__getnewargs_ex__') or
-                hasattr(x, '__getinitargs__') or
-                x.__class__.__reduce__ != object.__reduce__ or
-                x.__class__.__reduce_ex__ != object.__reduce_ex__)
-
-
-def save_instance(instance, parent, name, memo):
-    if not instance_is_hdf5able(instance):
-        raise ValueError('instance {} cannot be saved as it '
-                         'implements unsupported parts of the '
-                         'pickle protocol'.format(instance))
-    # In general, instance state can be anything if the user has implemented
-    # __getstate__ so we need to be a little careful. In 99.9% of cases
-    # it will be a dict with string keys, so we optimise for that.
-    state, from_getstate = get_instance_state(instance)
-    is_str_dict = not from_getstate
-    if from_getstate:
-        # user provided a custom method - let's see if it's a string keyed dict
-        is_str_dict = type(state) == dict and is_string_keyed_dict(state)
-    if is_str_dict:
-        # common case - namespace can immediately go here.
-        save_unicode_dict(state, parent, name, memo)
+    if 'cls' in reduction:
+        cls_module, cls_name = reduction['cls']
+        node.attrs[attr_key_reduction_cls_module] = cls_module
+        node.attrs[attr_key_reduction_cls_name] = cls_name
+    elif 'func' in reduction:
+        func_module, func_name = reduction['func']
+        node.attrs[attr_key_reduction_func_module] = func_module
+        node.attrs[attr_key_reduction_func_name] = func_name
     else:
-        # it's something else. Let's make a subgroup called state and save out
-        # whatever the user gave us
-        h5_export(state, parent.create_group(name), '__getstate__', memo)
-        parent[name].attrs[attr_key_instance_has_custom_getstate] = True
-    # state added itself to the parent. Grab the node and set the attribute
-    # so it can be decoded in the future
-    parent[name].attrs[attr_key_instance_cls] = str_of_cls(instance.__class__)
+        H5itPicklingError("reduction state is missing a 'func' or 'cls'")
+
+    if 'state' in reduction:
+        # state needs to be saved.
+        state = reduction['state']
+        h5_export(state, node, 'state', memo)
+
+    if 'listitems' in reduction:
+        listitems = reduction['listitems']
+        save_list(listitems, node, 'listitems', memo)
+
+    if 'dictitems' in reduction:
+        dictitems = reduction['dictitems']
+        save_list(dictitems, node, 'dictitems', memo)
+
+
+def save_global(g, parent, name, _):
+    from .stdpickle import pickle_save_global
+    node = parent.create_group(name)  # A blank group
+    module, g_name = pickle_save_global(g)
+    node.attrs[attr_key_global_module] = module
+    node.attrs[attr_key_global_name] = g_name
 
 
 def save_ndarray(a, parent, name, _):
@@ -265,14 +294,14 @@ def save_path(path, parent, name, _):
     parent.create_dataset(name, data=as_unicode(path))
 
 
-str_of_cls = lambda x: "{}.{}".format(x.__module__, x.__name__)
+# str_of_cls = lambda x: "{}.{}".format(x.__module__, x.__name__)
 
 
-def import_symbol(name):
-    symbol_name = name.split('.')[-1]
-    module_name = '.'.join(name.split('.')[:-1])
-    m = importlib.import_module(module_name)
-    return m.__getattribute__(symbol_name)
+# def import_symbol(name):
+#     symbol_name = name.split('.')[-1]
+#     module_name = '.'.join(name.split('.')[:-1])
+#     m = importlib.import_module(module_name)
+#     return m.__getattribute__(symbol_name)
 
 
 T = namedtuple('T', ["type", "str", "importer", "exporter"])
@@ -286,6 +315,7 @@ types = [T(list, "list", load_list, save_list),
          T(type(None), "NoneType", load_none, save_none),
          T(strTypes, "unicode", load_str, save_str),
          T(bool, "bool", load_bool, save_bool),
+         T(globalTypes, "global", load_global, save_global),
          T((PosixPath, PurePosixPath), "pathlib.PosixPath", load_posix_path, save_path),
          T((WindowsPath, PureWindowsPath), "pathlib.WindowsPath", load_windows_path, save_path),
          T(numberTypes, "Number", load_number, save_number)]
@@ -307,7 +337,8 @@ for t in types:
     str_to_importer[t.str] = t.importer
     type_to_str[t.type] = t.str
 
-str_to_importer['instance'] = load_instance
+# add on the reduction importer
+str_to_importer[attr_key_type_reduction] = load_reducible
 
 
 def link_path_if_softlink(node, name):
@@ -327,10 +358,10 @@ def h5_import(parent, name, memo):
         # this object has already been loaded - just return it
         return memo[memo_path]
     node = parent[name]
-    Type = node.attrs.get(attr_key_type)
-    if Type is not None:
+    type_ = node.attrs.get(attr_key_type)
+    if type_ is not None:
         # node type is specific
-        importer = str_to_importer.get(Type)
+        importer = str_to_importer.get(type_)
         if importer is not None:
             obj = importer(parent, name, memo)
             # remember we imported this already
@@ -339,10 +370,11 @@ def h5_import(parent, name, memo):
         else:
             raise H5itUnpicklingError(
                 "Don't know how to import type "
-                "{} for node {}".format(Type, node))
+                "{} for node {}".format(type_, node))
     else:
-        raise H5itUnpicklingError("Cannot find Type "
-                                  "attribute on {}".format(node))
+        raise H5itUnpicklingError("Cannot find {} "
+                                  "attribute on {}".format(attr_key_type,
+                                                           node))
 
 
 def h5_export(x, parent, name, memo):
@@ -353,15 +385,9 @@ def h5_export(x, parent, name, memo):
     type_x = type(x)
     exporter = type_to_exporter.get(type_x)
     if exporter is None:
-        # hmm hopefully it's an object instance, otherwise we will be unable
-        # to proceed
-        if isinstance(x, object):
-            exporter = save_instance
-            type_str = 'instance'
-        else:
-            raise H5itPicklingError("Cannot export {} "
-                                    "named '{}' of type "
-                                    "{}".format(x, name, type_x))
+        # use the pickle protocol to save a reducible/global
+        exporter = save_reducible
+        type_str = attr_key_type_reduction
     else:
         type_str = type_to_str.get(type_x)
     # definitely have type_str and exporter
