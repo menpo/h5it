@@ -1,10 +1,7 @@
 from __future__ import unicode_literals
 import tempfile
-from nose.tools import raises
 
-from h5it import save, load
-from h5it.base import instance_is_hdf5able
-
+from h5it import dump, load
 
 
 path = tempfile.mkstemp()[1]
@@ -46,12 +43,12 @@ class FooCustom(Foo):
 
 
 def test_save_instance():
-    save(path, Foo())
+    dump(Foo(), path)
 
 
 def test_load_instance():
     x = Foo()
-    save(path, x)
+    dump(x, path)
     y = load(path)
     assert y == x
     assert type(y) == Foo
@@ -59,7 +56,7 @@ def test_load_instance():
 
 def test_load_custom_instance():
     x = FooCustom()
-    save(path, x)
+    dump(x, path)
     y = load(path)
     assert y == x
     print(type(y))
@@ -75,18 +72,10 @@ class NotAllowedReduce(object):
         pass
 
 
-def test_not_allowed_reduce():
-    assert not instance_is_hdf5able(NotAllowedReduce())
-
-
 class NotAllowedReduceEx(object):
 
     def __reduce_ex__(self):
         pass
-
-
-def test_not_allowed_reduce_ex():
-    assert not instance_is_hdf5able(NotAllowedReduceEx())
 
 
 class NotAllowedGetInitArgs(object):
@@ -95,18 +84,10 @@ class NotAllowedGetInitArgs(object):
         pass
 
 
-def test_not_allowed_getinitargs():
-    assert not instance_is_hdf5able(NotAllowedGetInitArgs())
-
-
 class NotAllowedGetNewArgs(object):
 
     def __getnewargs__(self):
         pass
-
-
-def test_not_allowed_getnewargs():
-    assert not instance_is_hdf5able(NotAllowedGetNewArgs())
 
 
 class NotAllowedGetNewArgsEx(object):
@@ -115,17 +96,9 @@ class NotAllowedGetNewArgsEx(object):
         pass
 
 
-def test_not_allowed_getnewargs_ex():
-    assert not instance_is_hdf5able(NotAllowedGetNewArgsEx())
-
-
 class NotAllowedSlotsWithoutGetState(object):
 
     __slots__ = 'y'
-
-
-def test_not_allowed_slots_without_get_state():
-    assert not instance_is_hdf5able(NotAllowedSlotsWithoutGetState())
 
 
 class IsAllowedSlotsWithGetState(object):
@@ -134,12 +107,3 @@ class IsAllowedSlotsWithGetState(object):
 
     def __getstate__(self):
         pass
-
-
-def test_is_allowed_slots_with_get_state():
-    assert instance_is_hdf5able(IsAllowedSlotsWithGetState())
-
-
-@raises(ValueError)
-def ensure_non_hdf5able_instance_raises_value_error():
-    save(path, NotAllowedReduce())

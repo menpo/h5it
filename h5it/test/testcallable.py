@@ -1,6 +1,6 @@
 import tempfile
 from nose.tools import raises
-from h5it import SerializableCallable, save, load
+from h5it import SerializableCallable, dump, load
 
 path = tempfile.mkstemp()[1]
 
@@ -64,7 +64,7 @@ def test_save_serializable_callable():
         return product(args)
 
     sc = SerializableCallable(a_mock_function, [itertools])
-    save(path, sc)
+    dump(sc, path)
 
 
 def test_load_serializable_callable():
@@ -74,6 +74,6 @@ def test_load_serializable_callable():
         return np.sum(args)
 
     sc = SerializableCallable(a_function, [])
-    save(path, sc)
+    dump(sc, path)
     f = load(path).callable
     assert a_function(2, 4) == f(2, 4)

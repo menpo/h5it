@@ -1,4 +1,4 @@
-robocopy %RECIPE_DIR%\.. . /E
+robocopy "%RECIPE_DIR%\.." . /E
 
 "%PYTHON%" setup.py install --single-version-externally-managed --record=%TEMP%record.txt
 

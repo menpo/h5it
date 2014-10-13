@@ -44,7 +44,7 @@ which are identifiers for saving out extension modules. Again support can
 absolutely be added in the future
 
 3. The use of persistent ids. This only exists for subclasses of
-Pickler/Unpickler so it's not suprising we don't support it.
+Pickler/Unpickler so it's not surprising we don't support it.
 
 4. Python 3.3 added private dispatch tables to picklers - this is not
 presently supported in h5it (you can customise __reduce__ methods but only

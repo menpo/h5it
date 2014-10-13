@@ -93,11 +93,6 @@ def load_dict(parent, name, memo):
     return dict(h5_import(node, k, memo) for k in node.keys())
 
 
-def load_set(parent, name, memo):
-    node = parent[name]
-    return set(h5_import(node, k, memo) for k in node.keys())
-
-
 def load_reducible(parent, name, memo):
     from .stdpickle import find_class, load_build
     node = parent[name]
@@ -216,12 +211,6 @@ def save_dict(d, parent, name, memo):
         h5_export((k, v), dict_node, str(hash(k)), memo)
 
 
-def save_set(s, parent, name, memo):
-    set_node = parent.create_group(name)
-    for x in s:
-        h5_export(x, set_node, str(hash(x)), memo)
-
-
 def save_reducible(x, parent, name, memo):
     from .stdpickle import pickle_save, GlobalTuple
     # save down the object: we'll either get back a global or a reduction state
@@ -299,23 +288,12 @@ def save_path(path, parent, name, _):
     parent.create_dataset(name, data=as_unicode(path))
 
 
-# str_of_cls = lambda x: "{}.{}".format(x.__module__, x.__name__)
-
-
-# def import_symbol(name):
-#     symbol_name = name.split('.')[-1]
-#     module_name = '.'.join(name.split('.')[:-1])
-#     m = importlib.import_module(module_name)
-#     return m.__getattribute__(symbol_name)
-
-
 T = namedtuple('T', ["type", "str", "importer", "exporter"])
 
 
 types = [T(list, "list", load_list, save_list),
          T(tuple, "tuple", load_tuple, save_list),  # export is as list
          T(dict, "dict", load_dict, save_dict),
-         T(set, "set", load_set, save_set),
          T(np.ndarray, "ndarray", load_ndarray, save_ndarray),
          T(type(None), "NoneType", load_none, save_none),
          T(strTypes, "unicode", load_str, save_str),
@@ -413,7 +391,7 @@ def h5_export(x, parent, name, memo):
         memo[id(memo)] = [x]
 
 
-def save(path, x):
+def dump(x, path):
     with h5py.File(path, "w") as f:
         h5_export(x, f, top_level_group_namespace, {})
 
