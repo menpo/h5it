@@ -234,6 +234,8 @@ def save_reducible(x, parent, name, memo):
     # group
     node = parent.create_group(name)
 
+    print reduction
+
     if 'cls' in reduction:
         cls_module, cls_name = reduction['cls']
         node.attrs[attr_key_reduction_cls_module] = cls_module
@@ -244,6 +246,9 @@ def save_reducible(x, parent, name, memo):
         node.attrs[attr_key_reduction_func_name] = func_name
     else:
         H5itPicklingError("reduction state is missing a 'func' or 'cls'")
+
+    # save out the reduction args
+    save_list(reduction['args'], node, 'args', memo)
 
     if 'state' in reduction:
         # state needs to be saved.
