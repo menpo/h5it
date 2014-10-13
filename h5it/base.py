@@ -223,8 +223,6 @@ def save_reducible(x, parent, name, memo):
     # group
     node = parent.create_group(name)
 
-    print reduction
-
     if 'cls' in reduction:
         cls_module, cls_name = reduction['cls']
         node.attrs[attr_key_reduction_cls_module] = cls_module
