@@ -1,25 +1,17 @@
 from __future__ import unicode_literals
 
-import sys
 import os
 from collections import namedtuple
 from pathlib import PosixPath, WindowsPath, PurePosixPath, PureWindowsPath
 import numpy as np
 import h5py
 
-from pickle import PicklingError, UnpicklingError
-
-
-class H5itPicklingError(PicklingError):
-    pass
-
-
-class H5itUnpicklingError(UnpicklingError):
-    pass
-
-
-is_py2 = sys.version_info.major == 2
-is_py3 = sys.version_info.major == 3
+from .stdpickle import (H5itPicklingError, H5itUnpicklingError,
+                        is_py2, is_py3,
+                        r_key_func, r_key_cls, r_key_args,
+                        r_key_state, r_key_listitems, r_key_dictitems,
+                        pickle_load_global, pickle_save_global, GlobalTuple,
+                        pickle_load_build, pickle_save)
 
 if is_py2:
     from types import ClassType, FunctionType, BuiltinFunctionType, TypeType
@@ -94,7 +86,6 @@ def load_dict(parent, name, memo):
 
 
 def load_reducible(parent, name, memo):
-    from .stdpickle import pickle_load_build, pickle_load_global
     node = parent[name]
     # import the class and new it up
     if attr_key_global_name in node.attrs:
@@ -102,7 +93,7 @@ def load_reducible(parent, name, memo):
         return load_global(parent, name, memo)
 
     # if not, we are loading with NEWOBJ or REDUCE
-    args = load_tuple(node, 'args', memo)
+    args = load_tuple(node, r_key_args, memo)
     if attr_key_reduction_cls_module in node.attrs:
         # reduction using the NEWOBJ protocol
         cls_module = node.attrs[attr_key_reduction_cls_module]
@@ -120,17 +111,17 @@ def load_reducible(parent, name, memo):
             "error loading reduction - can't find {} or {} in attrs".format(
             attr_key_reduction_cls_module, attr_key_reduction_func_module))
 
-    if 'state' in node:
-        state = h5_import(node, 'state', memo)
+    if r_key_state in node:
+        state = h5_import(node, r_key_state, memo)
         pickle_load_build(obj, state)
 
-    if 'listitems' in node:
-        listitems = h5_import(node, 'listitems', memo)
+    if r_key_listitems in node:
+        listitems = h5_import(node, r_key_listitems, memo)
         for i in listitems:
             obj.append(i)
 
-    if 'iteritems' in node:
-        iteritems = h5_import(node, 'iteritems', memo)
+    if r_key_dictitems in node:
+        iteritems = h5_import(node, r_key_dictitems, memo)
         for k, v in iteritems:
             obj[k] = v
 
@@ -138,7 +129,6 @@ def load_reducible(parent, name, memo):
 
 
 def load_global(parent, name, _):
-    from .stdpickle import pickle_load_global
     module = parent[name].attrs[attr_key_global_module]
     m_name = parent[name].attrs[attr_key_global_name]
     return pickle_load_global(module, m_name)
@@ -212,7 +202,6 @@ def save_dict(d, parent, name, memo):
 
 
 def save_reducible(x, parent, name, memo):
-    from .stdpickle import pickle_save, GlobalTuple
     # save down the object: we'll either get back a global or a reduction state
     reduction = pickle_save(x)
     if type(reduction) == GlobalTuple:
@@ -223,36 +212,31 @@ def save_reducible(x, parent, name, memo):
     # group
     node = parent.create_group(name)
 
-    if 'cls' in reduction:
-        cls_module, cls_name = reduction['cls']
+    if r_key_cls in reduction:
+        cls_module, cls_name = reduction[r_key_cls]
         node.attrs[attr_key_reduction_cls_module] = cls_module
         node.attrs[attr_key_reduction_cls_name] = cls_name
-    elif 'func' in reduction:
-        func_module, func_name = reduction['func']
+    elif r_key_func in reduction:
+        func_module, func_name = reduction[r_key_func]
         node.attrs[attr_key_reduction_func_module] = func_module
         node.attrs[attr_key_reduction_func_name] = func_name
     else:
         H5itPicklingError("reduction state is missing a 'func' or 'cls'")
 
     # save out the reduction args
-    save_list(reduction['args'], node, 'args', memo)
+    save_list(reduction[r_key_args], node, r_key_args, memo)
 
-    if 'state' in reduction:
-        # state needs to be saved.
-        state = reduction['state']
-        h5_export(state, node, 'state', memo)
+    if r_key_state in reduction:
+        h5_export(reduction[r_key_state], node, r_key_state, memo)
 
-    if 'listitems' in reduction:
-        listitems = reduction['listitems']
-        h5_export(listitems, node, 'listitems', memo)
+    if r_key_listitems in reduction:
+        h5_export(reduction[r_key_listitems], node, r_key_listitems, memo)
 
-    if 'dictitems' in reduction:
-        dictitems = reduction['dictitems']
-        h5_export(dictitems, node, 'dictitems', memo)
+    if r_key_dictitems in reduction:
+        h5_export(reduction[r_key_dictitems], node, r_key_dictitems, memo)
 
 
 def save_global(g, parent, name, _):
-    from .stdpickle import pickle_save_global
     node = parent.create_group(name)  # A blank group
     module, g_name = pickle_save_global(g)
     node.attrs[attr_key_global_module] = module

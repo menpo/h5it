@@ -2,16 +2,34 @@
 # libraries. It is intended to provide a clean implementation of the pickle
 # protocol minus the actual file format on disk. This module contains no
 # code specific to HDF5 files.
-
-from .base import is_py2, is_py3, H5itPicklingError
 import sys
 from collections import namedtuple
+from pickle import (whichmodule, PicklingError, UnpicklingError,
+                    dispatch_table, _extension_registry)
 
 
-GlobalTuple = namedtuple('Global', ('module', 'name'))
+class H5itPicklingError(PicklingError):
+    pass
 
-from pickle import (whichmodule, PicklingError, dispatch_table,
-                    _extension_registry)
+
+class H5itUnpicklingError(UnpicklingError):
+    pass
+
+
+GlobalTuple = namedtuple(u'Global', (u'module', u'name'))
+
+
+r_key_func = u'func'
+r_key_cls = u'cls'
+r_key_args = u'args'
+r_key_state = u'state'
+r_key_listitems = u'listitems'
+r_key_dictitems = u'dictitems'
+
+
+is_py2 = sys.version_info.major == 2
+is_py3 = sys.version_info.major == 3
+
 
 if is_py2:
     from types import TypeType, StringType, TupleType
@@ -277,11 +295,11 @@ def save_reduce_py3(func, args, state=None, listitems=None, dictitems=None,
             raise PicklingError(
                 "args[0] from __newobj__ args has the wrong class")
         args = args[1:]
-        reduced['cls'] = save_global_py3(cls)
-        reduced['args'] = args
+        reduced[r_key_cls] = save_global_py3(cls)
+        reduced[r_key_args] = args
     else:
-        reduced['func'] = save_global_py3(func)
-        reduced['args'] = args
+        reduced[r_key_func] = save_global_py3(func)
+        reduced[r_key_args] = args
 
     # if obj is not None:
     #     # If the object is already in the memo, this means it is
@@ -298,13 +316,13 @@ def save_reduce_py3(func, args, state=None, listitems=None, dictitems=None,
     # items and dict items (as (key, value) tuples), or None.
 
     if listitems is not None:
-        reduced['listitems'] = listitems
+        reduced[r_key_listitems] = listitems
 
     if dictitems is not None:
-        reduced['dictitems'] = dictitems
+        reduced[r_key_dictitems] = dictitems
 
     if state is not None:
-        reduced['state'] = state
+        reduced[r_key_state] = state
 
     return reduced
 
@@ -356,11 +374,11 @@ def save_reduce_py2(func, args, state=None, listitems=None, dictitems=None,
             raise PicklingError(
                 "args[0] from __newobj__ args has the wrong class")
         args = args[1:]
-        reduced['cls'] = save_global_py2(cls)
-        reduced['args'] = args
+        reduced[r_key_cls] = save_global_py2(cls)
+        reduced[r_key_args] = args
     else:
-        reduced['func'] = save_global_py2(func)
-        reduced['args'] = args
+        reduced[r_key_func] = save_global_py2(func)
+        reduced[r_key_args] = args
 
     # More new special cases (that work with older protocols as
     # well): when __reduce__ returns a tuple with 4 or 5 items,
@@ -368,13 +386,13 @@ def save_reduce_py2(func, args, state=None, listitems=None, dictitems=None,
     # items and dict items (as (key, value) tuples), or None.
 
     if listitems is not None:
-        reduced['listitems'] = listitems
+        reduced[r_key_listitems] = listitems
 
     if dictitems is not None:
-        reduced['dictitems'] = dictitems
+        reduced[r_key_dictitems] = dictitems
 
     if state is not None:
-        reduced['state'] = state
+        reduced[r_key_state] = state
 
     return reduced
 
