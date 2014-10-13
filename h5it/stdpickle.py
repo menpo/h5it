@@ -380,11 +380,14 @@ def save_reduce_py2(func, args, state=None, listitems=None, dictitems=None,
 
 
 def find_class_py3(module, name, proto=2, fix_imports=True):
+    print(type(module))
     if proto < 3 and fix_imports:
+        print('here we go')
         if (module, name) in _compat_pickle.NAME_MAPPING:
             module, name = _compat_pickle.NAME_MAPPING[(module, name)]
         if module in _compat_pickle.IMPORT_MAPPING:
             module = _compat_pickle.IMPORT_MAPPING[module]
+    print(type(module))
     __import__(module, level=0)
     return _getattribute(sys.modules[module], name,
                          allow_qualname=proto >= 4)
@@ -458,16 +461,26 @@ def load_build_py3(inst, state):
     return inst
 
 
+def load_global_py3(module, name):
+    module = module.decode("utf-8")
+    name = name.decode("utf-8")
+    return find_class_py3(module, name)
+
+
+def load_global_py2(module, name):
+    return find_class_py2(module, name)
+
+
 if is_py2:
     pickle_save_global = save_global_py2
     pickle_save = save_py2
-    find_class = find_class_py2
-    load_build = load_build_py2
+    pickle_load_build = load_build_py2
+    pickle_load_global = load_global_py2
 elif is_py3:
     pickle_save_global = save_global_py3
     pickle_save = save_py3
-    find_class = find_class_py3
-    load_build = load_build_py3
+    pickle_load_build = load_build_py3
+    pickle_load_global = load_global_py3
 
 ############################### DISPATCH TABLES ###############################
 #

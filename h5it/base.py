@@ -94,7 +94,7 @@ def load_dict(parent, name, memo):
 
 
 def load_reducible(parent, name, memo):
-    from .stdpickle import find_class, load_build
+    from .stdpickle import pickle_load_build, pickle_load_global
     node = parent[name]
     # import the class and new it up
     if attr_key_global_name in node.attrs:
@@ -107,13 +107,15 @@ def load_reducible(parent, name, memo):
         # reduction using the NEWOBJ protocol
         cls_module = node.attrs[attr_key_reduction_cls_module]
         cls_name = node.attrs[attr_key_reduction_cls_name]
-        cls = find_class(cls_module, cls_name)
+        cls = pickle_load_global(cls_module, cls_name)
         obj = cls.__new__(cls, *args)
     elif attr_key_reduction_func_module in node.attrs:
         # reduction using the REDUCE protocol
         func_module = node.attrs[attr_key_reduction_func_module]
         func_name = node.attrs[attr_key_reduction_func_name]
-        func = find_class(func_module, func_name)
+        print(type(func_module))
+        print(type(func_name))
+        func = pickle_load_global(func_module, func_name)
         obj = func(*args)
     else:
         raise H5itUnpicklingError(
@@ -122,7 +124,7 @@ def load_reducible(parent, name, memo):
 
     if 'state' in node:
         state = h5_import(node, 'state', memo)
-        load_build(obj, state)
+        pickle_load_build(obj, state)
 
     if 'listitems' in node:
         listitems = h5_import(node, 'listitems', memo)
@@ -138,10 +140,10 @@ def load_reducible(parent, name, memo):
 
 
 def load_global(parent, name, _):
-    from .stdpickle import find_class
+    from .stdpickle import pickle_load_global
     module = parent[name].attrs[attr_key_global_module]
     m_name = parent[name].attrs[attr_key_global_name]
-    return find_class(module, m_name)
+    return pickle_load_global(module, m_name)
 
 
 def load_ndarray(parent, name, _):
@@ -229,6 +231,7 @@ def save_reducible(x, parent, name, memo):
         node.attrs[attr_key_reduction_cls_name] = cls_name
     elif 'func' in reduction:
         func_module, func_name = reduction['func']
+        print('saving {}, {}'.format(type(func_module), type(func_name)))
         node.attrs[attr_key_reduction_func_module] = func_module
         node.attrs[attr_key_reduction_func_name] = func_name
     else:
