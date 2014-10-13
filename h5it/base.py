@@ -244,11 +244,11 @@ def save_reducible(x, parent, name, memo):
 
     if 'listitems' in reduction:
         listitems = reduction['listitems']
-        save_list(listitems, node, 'listitems', memo)
+        h5_export(listitems, node, 'listitems', memo)
 
     if 'dictitems' in reduction:
         dictitems = reduction['dictitems']
-        save_list(dictitems, node, 'dictitems', memo)
+        h5_export(dictitems, node, 'dictitems', memo)
 
 
 def save_global(g, parent, name, _):
@@ -297,9 +297,11 @@ types = [T(list, "list", load_list, save_list),
          T(strTypes, "unicode", load_str, save_str),
          T(bool, "bool", load_bool, save_bool),
          T(globalTypes, "global", load_global, save_global),
-         T((PosixPath, PurePosixPath), "pathlib.PosixPath", load_posix_path, save_path),
-         T((WindowsPath, PureWindowsPath), "pathlib.WindowsPath", load_windows_path, save_path),
-         T(numberTypes, "Number", load_number, save_number)]
+         T(numberTypes, "Number", load_number, save_number),
+         T((PosixPath, PurePosixPath), "pathlib.PosixPath",
+           load_posix_path, save_path),
+         T((WindowsPath, PureWindowsPath), "pathlib.WindowsPath",
+           load_windows_path, save_path)]
 
 type_to_exporter = dict()
 str_to_importer = dict()
