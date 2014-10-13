@@ -3,8 +3,7 @@ from __future__ import unicode_literals
 import sys
 import os
 from collections import namedtuple
-from pathlib import (PosixPath, WindowsPath, PurePosixPath, PureWindowsPath,
-                     Path)
+from pathlib import PosixPath, WindowsPath, PurePosixPath, PureWindowsPath
 import numpy as np
 import h5py
 
