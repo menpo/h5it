@@ -3,7 +3,8 @@ from __future__ import unicode_literals
 import sys
 import os
 from collections import namedtuple
-from pathlib import PosixPath, WindowsPath, PurePosixPath, PureWindowsPath
+from pathlib import (PosixPath, WindowsPath, PurePosixPath, PureWindowsPath,
+                     Path)
 import numpy as np
 import h5py
 
@@ -391,11 +392,19 @@ def h5_export(x, parent, name, memo):
         memo[id(memo)] = [x]
 
 
+def norm_path(path):
+    r"""
+    Uses all the tricks in the book to expand a path out to an absolute one.
+    """
+    return os.path.abspath(os.path.normpath(
+        os.path.expandvars(os.path.expanduser(as_unicode(path)))))
+
+
 def dump(x, path):
-    with h5py.File(path, "w") as f:
+    with h5py.File(norm_path(path), "w") as f:
         h5_export(x, f, top_level_group_namespace, {})
 
 
 def load(path):
-    with h5py.File(path, "r") as f:
+    with h5py.File(norm_path(path), "r") as f:
         return h5_import(f, top_level_group_namespace, {})

@@ -288,3 +288,22 @@ def test_load_reference():
     dump((a, b), path)
     a_l, b_l = load(path)
     assert id(a_l['c_from_a']) == id(b_l['c_from_b'])
+
+
+def test_save_with_path():
+    dump(None, Path(path))
+
+
+def test_save_with_path_load_with_str():
+    dump(None, Path(path))
+    assert load(path) is None
+
+
+def test_save_with_path_load_with_path():
+    dump(None, Path(path))
+    assert load(Path(path)) is None
+
+
+def test_save_with_str_load_with_path():
+    dump(None, path)
+    assert load(Path(path)) is None
