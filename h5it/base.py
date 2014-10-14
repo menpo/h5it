@@ -157,7 +157,6 @@ def load_bytes(parent, name, memo, encoding):
 
 
 def load_py2_bytes_on_py3(parent, name, memo, encoding):
-    print('hitting method')
     if encoding == 'ASCII':
         return parent[name].value.decode('ASCII')
     elif encoding == 'bytes':

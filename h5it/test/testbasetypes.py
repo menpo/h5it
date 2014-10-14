@@ -198,7 +198,7 @@ if host_is_posix:
 
 if host_is_windows:
     def test_load_posix_path_on_windows():
-        x = PosixPath('/some/path/here')
+        x = PurePosixPath('/some/path/here')
         dump(x, path)
         y = load(path)
         assert y == x
