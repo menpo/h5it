@@ -61,3 +61,15 @@ def test_load_custom_instance():
     assert y == x
     print(type(y))
     assert type(y) == FooCustom
+
+
+def test_save_set():
+    dump({'b', True, 'd', 1, None, ('key', 2.5012343)}, path)
+
+
+def test_load_set():
+    x = {'b', True, 'd', 1, None, ('key', 2.5012343)}
+    dump(x, path)
+    y = load(path)
+    assert y == x
+    assert type(y) == set

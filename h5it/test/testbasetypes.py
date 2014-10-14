@@ -1,18 +1,40 @@
+# coding=utf-8
 from __future__ import unicode_literals
 
 import tempfile
-
+from nose.tools import raises
+import os
+from os.path import join as j
 import numpy as np
 from pathlib import (Path, PosixPath, PurePosixPath,
                      WindowsPath, PureWindowsPath)
 
-from h5it import dump, load
-from h5it.base import is_py2, as_unicode, host_is_posix, host_is_windows
+from h5it import dump, load, H5itUnpicklingError
+from h5it.base import is_py2, host_is_posix, host_is_windows
+import pickle
+
+test_dir = os.path.dirname(os.path.realpath(__file__))
+files_dir = os.path.join(test_dir, 'files')
+
+unicode_test_str = (u'σκουλικομερμυγκότρυπα ασπρη πέτρα '
+                    u'ξέξασπρη κι από τον ήλιο ξεξασπρότερη')
+
+py2_unicode_pickle = j(files_dir, 'py2_unicode_proto2_bin.pickle')
+py3_unicode_pickle = j(files_dir, 'py3_unicode_proto2_bin.pickle')
+py2_unicode_h5it = j(files_dir, 'py2_unicode.hdf5')
+py3_unicode_h5it = j(files_dir, 'py3_unicode.hdf5')
+
+py2_bytes_pickle = j(files_dir, 'py2_bytes_proto2_bin.pickle')
+py3_bytes_pickle = j(files_dir, 'py3_bytes_proto2_bin.pickle')
+py2_bytes_h5it = j(files_dir, 'py2_bytes.hdf5')
+py3_bytes_h5it = j(files_dir, 'py3_bytes.hdf5')
 
 if is_py2:
     unicode_type = unicode
+    bytes_type = str
 else:
     unicode_type = str
+    bytes_type = bytes
 
 path = tempfile.mkstemp()[1]
 
@@ -30,7 +52,7 @@ def test_save_complex():
 
 
 def test_save_unicode():
-    dump(u'unicode str', path)
+    dump(unicode_test_str, path)
 
 
 def test_save_byte_str():
@@ -94,10 +116,6 @@ def test_save_dict_recursive():
     dump({'b': 2, 'c': True, 'd': [1, None, {'key': 2.5012343}]}, path)
 
 
-def test_save_set():
-    dump({'b', True, 'd', 1, None, ('key', 2.5012343)}, path)
-
-
 def test_load_integer():
     x = 1
     dump(x, path)
@@ -123,10 +141,9 @@ def test_load_complex():
 
 
 def test_load_unicode():
-    x = "some unicode"
-    dump(x, path)
+    dump(unicode_test_str, path)
     y = load(path)
-    assert y == x
+    assert y == unicode_test_str
     assert type(y) == unicode_type
 
 
@@ -134,8 +151,8 @@ def test_load_byte_str():
     x = b"some byte str"
     dump(x, path)
     y = load(path)
-    assert y == as_unicode(x)
-    assert type(y) == unicode_type
+    assert y == x
+    assert type(y) == bytes_type
 
 
 def test_load_bool():
@@ -274,14 +291,6 @@ def test_load_recursive_dict():
     assert type(y) == dict
 
 
-def test_load_set():
-    x = {'b', True, 'd', 1, None, ('key', 2.5012343)}
-    dump(x, path)
-    y = load(path)
-    assert y == x
-    assert type(y) == set
-
-
 def test_load_reference():
     c = [1, 2, 3]
     a = {'c_from_a': c}
@@ -308,3 +317,89 @@ def test_save_with_path_load_with_path():
 def test_save_with_str_load_with_path():
     dump(None, path)
     assert load(Path(path)) is None
+
+
+if is_py2:
+
+    def test_load_unicode_from_py3_on_py2():
+        with open(py3_unicode_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py3_unicode_h5it)
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_bytes_from_py3_on_py2():
+        with open(py3_bytes_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py3_bytes_h5it)
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_unicode_from_py2_on_py2():
+        with open(py2_unicode_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py2_unicode_h5it)
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_bytes_from_py2_on_py2():
+        with open(py2_bytes_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py2_bytes_h5it)
+        assert type(y) == type(x)
+        assert x == y
+
+else:
+
+    def test_load_unicode_from_py3_on_py3():
+        with open(py3_unicode_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py3_unicode_h5it)
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_bytes_from_py3_on_py3():
+        with open(py3_bytes_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py3_bytes_h5it)
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_bytes_from_py3_on_py3_encoding_ascii_shouldnt_matter():
+        with open(py3_bytes_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py3_bytes_h5it, encoding='ASCII')
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_unicode_from_py2_on_py3():
+        with open(py2_unicode_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py2_unicode_h5it)
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_bytes_from_py2_on_py3_encoding_default():
+        with open(py2_bytes_pickle, 'rb') as f:
+            x = pickle.load(f)
+        y = load(py2_bytes_h5it)
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_bytes_from_py2_on_py3_encoding_ascii():
+        with open(py2_bytes_pickle, 'rb') as f:
+            x = pickle.load(f, encoding='ASCII')
+        y = load(py2_bytes_h5it, encoding='ASCII')
+        assert type(y) == type(x)
+        assert x == y
+
+    def test_load_bytes_from_py2_on_py3_encoding_bytes():
+        with open(py2_bytes_pickle, 'rb') as f:
+            x = pickle.load(f, encoding='bytes')
+        y = load(py2_bytes_h5it, encoding='bytes')
+        assert type(y) == type(x)
+        assert x == y
+
+    @raises(H5itUnpicklingError)
+    def test_load_invalid_encoding():
+        load(py2_bytes_pickle, encoding='asda')

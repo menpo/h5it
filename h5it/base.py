@@ -15,16 +15,22 @@ from .stdpickle import (H5itPicklingError, H5itUnpicklingError,
 
 if is_py2:
     from types import ClassType, FunctionType, BuiltinFunctionType, TypeType
-    strTypes = (str, unicode)
-    numberTypes = (int, long, float, complex)
-    globalTypes = (ClassType, FunctionType, BuiltinFunctionType, TypeType)
-    as_unicode = unicode
+    strType = unicode
+    py2_bytesType = str
+    py3_bytesType = tuple()  # will never encounter Py3 bytes str on Py2
+    as_unicode_str = unicode
+
+    numberTypes = int, long, float, complex
+    globalTypes = ClassType, FunctionType, BuiltinFunctionType, TypeType
 elif is_py3:
     from types import FunctionType
-    strTypes = (str, bytes)
-    numberTypes = (int, float, complex)
+    strType = str
+    py2_bytesType = tuple()  # will never encounter Py2 bytes str on Py3
+    py3_bytesType = bytes
+    as_unicode_str = str
+
+    numberTypes = int, float, complex
     globalTypes = FunctionType
-    as_unicode = str
 else:
     raise Exception('h5it is only compatible with Python 2 or Python 3')
 
@@ -54,11 +60,11 @@ top_level_group_namespace = 'h5it'
 ListItem = namedtuple('ListItem', ['i', 'item'])
 
 
-def load_list(parent, name, memo):
+def load_list(parent, name, memo, encoding):
     node = parent[name]
     unordered = []
     for i, j in enumerate(node.keys()):
-        unordered.append(ListItem(int(j), h5_import(node, j, memo)))
+        unordered.append(ListItem(int(j), h5_import(node, j, memo, encoding)))
     ordered = sorted(unordered)
     counts = [x.i for x in ordered]
     items = [x.item for x in ordered]
@@ -68,32 +74,32 @@ def load_list(parent, name, memo):
     return items
 
 
-def load_tuple(parent, name, memo):
-    return tuple(load_list(parent, name, memo))
+def load_tuple(parent, name, memo, encoding):
+    return tuple(load_list(parent, name, memo, encoding))
 
 
-def load_unicode_dict(parent, name, memo):
+def load_unicode_dict(parent, name, memo, encoding):
     node = parent[name]
     imported_dict = {}
     for k in node.keys():
-        imported_dict[k] = h5_import(node, k, memo)
+        imported_dict[k] = h5_import(node, k, memo, encoding)
     return imported_dict
 
 
-def load_dict(parent, name, memo):
+def load_dict(parent, name, memo, encoding):
     node = parent[name]
-    return dict(h5_import(node, k, memo) for k in node.keys())
+    return dict(h5_import(node, k, memo, encoding) for k in node.keys())
 
 
-def load_reducible(parent, name, memo):
+def load_reducible(parent, name, memo, encoding):
     node = parent[name]
     # import the class and new it up
     if attr_key_global_name in node.attrs:
         # reduction actually saved out a global
-        return load_global(parent, name, memo)
+        return load_global(parent, name, memo, encoding)
 
     # if not, we are loading with NEWOBJ or REDUCE
-    args = load_tuple(node, r_key_args, memo)
+    args = load_tuple(node, r_key_args, memo, encoding)
     if attr_key_reduction_cls_module in node.attrs:
         # reduction using the NEWOBJ protocol
         cls_module = node.attrs[attr_key_reduction_cls_module]
@@ -112,58 +118,78 @@ def load_reducible(parent, name, memo):
             attr_key_reduction_cls_module, attr_key_reduction_func_module))
 
     if r_key_state in node:
-        state = h5_import(node, r_key_state, memo)
+        state = h5_import(node, r_key_state, memo, encoding)
         pickle_load_build(obj, state)
 
     if r_key_listitems in node:
-        listitems = h5_import(node, r_key_listitems, memo)
+        listitems = h5_import(node, r_key_listitems, memo, encoding)
         for i in listitems:
             obj.append(i)
 
     if r_key_dictitems in node:
-        iteritems = h5_import(node, r_key_dictitems, memo)
+        iteritems = h5_import(node, r_key_dictitems, memo, encoding)
         for k, v in iteritems:
             obj[k] = v
 
     return obj
 
 
-def load_global(parent, name, _):
+def load_global(parent, name, memo, encoding):
     module = parent[name].attrs[attr_key_global_module]
     m_name = parent[name].attrs[attr_key_global_name]
     return pickle_load_global(module, m_name)
 
 
-def load_ndarray(parent, name, _):
+def load_ndarray(parent, name, memo, encoding):
     return np.array(parent[name])
 
 
-def load_none(parent, name, _):
+def load_none(parent, name, memo, encoding):
     return None
 
 
-def load_str(parent, name, _):
-    return as_unicode(np.array(parent[name]))
+def load_str(parent, name, memo, encoding):
+    return parent[name].value
 
 
-def load_bool(parent, name, _):
+def load_bytes(parent, name, memo, encoding):
+    return parent[name].value
+
+
+def load_py2_bytes_on_py3(parent, name, memo, encoding):
+    print('hitting method')
+    if encoding == 'ASCII':
+        return parent[name].value.decode('ASCII')
+    elif encoding == 'bytes':
+        return parent[name].value
+    else:
+        raise H5itUnpicklingError("The only valid encodings are 'ASCII' or "
+                                  "'bytes'")
+
+if is_py3:
+    load_py2_bytes = load_py2_bytes_on_py3
+else:
+    load_py2_bytes = load_bytes
+
+
+def load_bool(parent, name, memo, encoding):
     return bool(parent[name].attrs[attr_key_bool_value])
 
 
-def load_number(parent, name, _):
+def load_number(parent, name, memo, encoding):
     return np.asscalar(parent[name].attrs[attr_key_number_value])
 
 
-def load_posix_path(parent, name, _):
-    str_path = load_str(parent, name, _)
+def load_posix_path(parent, name, memo, encoding):
+    str_path = load_str(parent, name, memo, encoding)
     if host_is_posix:
         return PosixPath(str_path)
     else:
         return PurePosixPath(str_path)
 
 
-def load_windows_path(parent, name, _):
-    str_path = load_str(parent, name, _)
+def load_windows_path(parent, name, memo, encoding):
+    str_path = load_str(parent, name, memo, encoding)
     if host_is_windows:
         return WindowsPath(str_path)
     else:
@@ -172,7 +198,7 @@ def load_windows_path(parent, name, _):
 
 # ------------------------------ EXPORTS ------------------------------ #
 
-zero_padded = lambda x: "{:0" + as_unicode(len(as_unicode(x))) + "}"
+zero_padded = lambda x: "{:0" + as_unicode_str(len(as_unicode_str(x))) + "}"
 
 
 def save_list(l, parent, name, memo):
@@ -182,7 +208,7 @@ def save_list(l, parent, name, memo):
         h5_export(x, list_node, padded.format(i), memo)
 
 
-is_string_keyed_dict = lambda d: (sum(not isinstance(k, strTypes)
+is_string_keyed_dict = lambda d: (sum(not isinstance(k, strType)
                                       for k in d.keys()) == 0)
 
 
@@ -253,6 +279,11 @@ def save_none(none, parent, name, _):
 
 
 def save_str(s, parent, name, _):
+    dt = h5py.special_dtype(vlen=as_unicode_str)
+    parent.create_dataset(name, data=s, dtype=dt)
+
+
+def save_bytes(s, parent, name, _):
     parent.create_dataset(name, data=s)
 
 
@@ -267,7 +298,7 @@ def save_number(a_number, parent, name, _):
 
 
 def save_path(path, parent, name, _):
-    parent.create_dataset(name, data=as_unicode(path))
+    parent.create_dataset(name, data=as_unicode_str(path))
 
 
 T = namedtuple('T', ["type", "str", "importer", "exporter"])
@@ -278,7 +309,9 @@ types = [T(list, "list", load_list, save_list),
          T(dict, "dict", load_dict, save_dict),
          T(np.ndarray, "ndarray", load_ndarray, save_ndarray),
          T(type(None), "NoneType", load_none, save_none),
-         T(strTypes, "unicode", load_str, save_str),
+         T(strType, "str", load_str, save_str),
+         T(py2_bytesType, "py2_bytes", load_py2_bytes, save_bytes),
+         T(py3_bytesType, "bytes", load_bytes, save_bytes),
          T(bool, "bool", load_bool, save_bool),
          T(globalTypes, "global", load_global, save_global),
          T(numberTypes, "Number", load_number, save_number),
@@ -314,7 +347,7 @@ def link_path_if_softlink(node, name):
         return node.get(name, getlink=True).path
 
 
-def h5_import(parent, name, memo):
+def h5_import(parent, name, memo, encoding):
     link_path = link_path_if_softlink(parent, name)
     if link_path is not None:
         # this node is a softlink - memoize the link destination path
@@ -330,7 +363,7 @@ def h5_import(parent, name, memo):
         # node type is specific
         importer = str_to_importer.get(type_)
         if importer is not None:
-            obj = importer(parent, name, memo)
+            obj = importer(parent, name, memo, encoding)
             # remember we imported this already
             memo[memo_path] = obj
             return obj
@@ -380,7 +413,7 @@ def norm_path(path):
     Uses all the tricks in the book to expand a path out to an absolute one.
     """
     return os.path.abspath(os.path.normpath(
-        os.path.expandvars(os.path.expanduser(as_unicode(path)))))
+        os.path.expandvars(os.path.expanduser(as_unicode_str(path)))))
 
 
 def dump(x, path):
@@ -388,6 +421,20 @@ def dump(x, path):
         h5_export(x, f, top_level_group_namespace, {})
 
 
-def load(path):
+def load_py2(path):
     with h5py.File(norm_path(path), "r") as f:
-        return h5_import(f, top_level_group_namespace, {})
+        # encoding is not used on Python 2, set to a dummy string
+        return h5_import(f, top_level_group_namespace, {}, '')
+
+
+def load_py3(path, encoding='ASCII'):
+    if encoding not in ['ASCII', 'bytes']:
+        raise H5itUnpicklingError("The only valid encodings are 'ASCII' or "
+                                  "'bytes'")
+    with h5py.File(norm_path(path), "r") as f:
+        return h5_import(f, top_level_group_namespace, {}, encoding)
+
+if is_py3:
+    load = load_py3
+else:
+    load = load_py2
