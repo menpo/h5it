@@ -27,4 +27,5 @@ setup(name=project_name,
       author='James Booth',
       author_email='james.booth08@imperial.ac.uk',
       packages=find_packages(),
+      package_data={'h5it': ['test/files/*']},
       install_requires=requirements)
