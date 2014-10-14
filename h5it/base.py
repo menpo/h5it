@@ -95,6 +95,10 @@ def load_reducible(parent, name, memo, encoding):
     # import the class and new it up
     if attr_key_global_name in node.attrs:
         # reduction actually saved out a global
+        # node that it is safe to skip h5_import and hence the memo checking
+        # here as we are calling load_global on the exact same node that
+        # load_reducible was called on. Prior to invocation a check was made of
+        # node to ensure it wasn't a symlink so we are OK.
         return load_global(parent, name, memo, encoding)
 
     # if not, we are loading with NEWOBJ or REDUCE
