@@ -48,7 +48,6 @@ attr_key_reduction_func_name = 'func_name'
 attr_key_global_module = 'module'
 attr_key_global_name = 'name'
 
-attr_key_instance_has_custom_getstate = 'instance_has_custom_getstate'
 attr_key_number_value = 'number_value'
 attr_key_bool_value = 'bool_value'
 
