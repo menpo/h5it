@@ -144,7 +144,7 @@ def load_global(parent, name, memo, encoding):
 
 
 def load_ndarray(parent, name, memo, encoding):
-    return np.array(parent[name])
+    return parent[name].value
 
 
 def load_none(parent, name, memo, encoding):
@@ -156,14 +156,14 @@ def load_str(parent, name, memo, encoding):
 
 
 def load_bytes(parent, name, memo, encoding):
-    return parent[name].value
+    return parent[name].value.tobytes()
 
 
 def load_py2_bytes_on_py3(parent, name, memo, encoding):
     if encoding == 'ASCII':
-        return parent[name].value.decode('ASCII')
+        return parent[name].value.tobytes().decode('ASCII')
     elif encoding == 'bytes':
-        return parent[name].value
+        return parent[name].value.tobytes()
     else:
         raise H5itUnpicklingError("The only valid encodings are 'ASCII' or "
                                   "'bytes'")
@@ -286,7 +286,7 @@ def save_str(s, parent, name, _):
 
 
 def save_bytes(s, parent, name, _):
-    parent.create_dataset(name, data=s)
+    parent.create_dataset(name, data=np.void(s))
 
 
 def save_bool(a_bool, parent, name, _):
